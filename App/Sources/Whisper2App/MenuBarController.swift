@@ -16,7 +16,12 @@ final class MenuBarController: NSObject {
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Whisper2")
+            if let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Whisper2") {
+                img.isTemplate = true
+                button.image = img
+            } else {
+                button.title = "W2"
+            }
             button.action = #selector(statusItemClicked(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
