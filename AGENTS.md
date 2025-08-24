@@ -20,3 +20,9 @@ Commit Triggers
 Security/Privacy
 - Store API keys in Keychain in the app bundle phase; for the skeleton, only use local JSON for placeholders and clearly mark it as insecure.
 - When handling audio, provide a “keep audio” toggle and cleanup utilities; handle missing audio gracefully in history.
+
+CLI Hygiene
+- Run commands sequentially rather than chaining with ';' or '&&' when approvals/sandboxing are in effect. Example:
+  - Preferred: `git add -A` then `git commit -m "msg"` as two separate invocations.
+  - Avoid: `git add -A; git commit -m "msg"`.
+- This reduces repeated permission prompts and makes failures clearer.
