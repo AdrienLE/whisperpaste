@@ -6,10 +6,10 @@ final class SettingsWindowController: NSWindowController {
     private var settings: Settings
 
     // Controls
-    private let apiKeyField = NSSecureTextField()
+    private let apiKeyField = PasteCapableSecureTextField()
     private let transcriptionPopup = NSPopUpButton()
     private let cleanupPopup = NSPopUpButton()
-    private let promptTextView = NSTextView()
+    private let promptTextView = PasteCapableTextView()
     private let promptScroll = NSScrollView()
     private let keepAudioCheckbox = NSButton(checkboxWithTitle: "Keep audio files", target: nil, action: nil)
     private let hotkeyField = NSTextField()
@@ -41,10 +41,9 @@ final class SettingsWindowController: NSWindowController {
 
         let rows: [NSView] = [
             makeRow(title: "OpenAI API Key:", field: apiKeyField),
-            makeRow(title: "Transcription Model:", field: transcriptionPopup),
-            makeRow(title: "Cleanup Model:", field: cleanupPopup),
+            modelsRow(),
             makePromptSection(),
-            makeRow(title: "Hotkey:", field: hotkeyField),
+            makeRow(title: "Hotkey:", field: hotkeyRecorder),
             keepAudioCheckbox
         ]
         let vstack = NSStackView(views: rows)
@@ -74,10 +73,11 @@ final class SettingsWindowController: NSWindowController {
         apiKeyField.controlSize = .regular
         apiKeyField.isBezeled = true
 
-        transcriptionPopup.addItems(withTitles: ["whisper-1", "gpt-4o-mini-transcribe"]) 
-        cleanupPopup.addItems(withTitles: ["gpt-4o-mini", "gpt-4o"]) 
+        transcriptionPopup.addItems(withTitles: ["whisper-1"]) // will be refreshed
+        cleanupPopup.addItems(withTitles: ["gpt-4o-mini"]) // will be refreshed
 
         promptTextView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        promptTextView.isEditable = true
         promptTextView.isVerticallyResizable = true
         promptTextView.isHorizontallyResizable = false
         promptScroll.documentView = promptTextView
@@ -86,6 +86,7 @@ final class SettingsWindowController: NSWindowController {
         promptScroll.heightAnchor.constraint(equalToConstant: 120).isActive = true
 
         hotkeyField.placeholderString = "ctrl+shift+space"
+        hotkeyRecorder.onChange = { [weak self] combo in self?.hotkeyField.stringValue = combo }
     }
 
     private func makeRow(title: String, field: NSView) -> NSView {
@@ -113,6 +114,29 @@ final class SettingsWindowController: NSWindowController {
         return v
     }
 
+    private lazy var hotkeyRecorder: HotkeyRecorderView = {
+        let r = HotkeyRecorderView()
+        r.hotkeyString = settings.hotkey
+        return r
+    }()
+
+    private func modelsRow() -> NSView {
+        let h = NSStackView()
+        h.orientation = .vertical
+        h.spacing = 8
+        let row1 = makeRow(title: "Transcription Model:", field: transcriptionPopup)
+        let row2 = makeRow(title: "Cleanup Model:", field: cleanupPopup)
+        let refresh = NSButton(title: "Refresh Models", target: self, action: #selector(refreshModels))
+        let mini = NSStackView(views: [refresh])
+        mini.orientation = .horizontal
+        mini.alignment = .leading
+        mini.spacing = 8
+        h.addArrangedSubview(row1)
+        h.addArrangedSubview(row2)
+        h.addArrangedSubview(mini)
+        return h
+    }
+
     private func loadValues() {
         apiKeyField.stringValue = settings.openAIKey ?? ""
         if !transcriptionPopup.itemTitles.contains(settings.transcriptionModel) {
@@ -126,6 +150,7 @@ final class SettingsWindowController: NSWindowController {
         promptTextView.string = settings.cleanupPrompt
         keepAudioCheckbox.state = settings.keepAudioFiles ? .on : .off
         hotkeyField.stringValue = settings.hotkey
+        hotkeyRecorder.hotkeyString = settings.hotkey
     }
 
     @objc private func saveTapped() {
@@ -142,5 +167,35 @@ final class SettingsWindowController: NSWindowController {
         } catch {
             NSSound.beep()
         }
+    }
+
+    @objc private func refreshModels() {
+        guard let key = (apiKeyField.stringValue.isEmpty ? settings.openAIKey : apiKeyField.stringValue), let apiKey = key, !apiKey.isEmpty else {
+            NSSound.beep()
+            return
+        }
+        let client = OpenAIClient()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                let models = try client.listModels(apiKey: apiKey)
+                let (transcription, cleanup) = Self.partitionModels(models: models)
+                DispatchQueue.main.async {
+                    self.transcriptionPopup.removeAllItems(); self.transcriptionPopup.addItems(withTitles: transcription)
+                    self.cleanupPopup.removeAllItems(); self.cleanupPopup.addItems(withTitles: cleanup)
+                    self.transcriptionPopup.selectItem(withTitle: self.settings.transcriptionModel)
+                    self.cleanupPopup.selectItem(withTitle: self.settings.cleanupModel)
+                }
+            } catch {
+                DispatchQueue.main.async { NSSound.beep() }
+            }
+        }
+    }
+
+    private static func partitionModels(models: [String]) -> ([String], [String]) {
+        let trans = models.filter { $0.localizedCaseInsensitiveContains("whisper") || $0.localizedCaseInsensitiveContains("transcribe") }
+        let clean = models.filter { $0.hasPrefix("gpt-") }
+        return (trans.isEmpty ? ["whisper-1", "gpt-4o-mini-transcribe"] : trans,
+                clean.isEmpty ? ["gpt-4o-mini", "gpt-4o"] : clean)
     }
 }

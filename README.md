@@ -11,6 +11,7 @@ Whisper2 is a macOS-only menu bar app for dictation: left-click to start/stop re
 - `scripts/build.sh`: Builds the app (SPM executable) in release mode.
 - `scripts/run.sh`: Builds and runs the app.
 - `scripts/build_and_run.sh`: Runs tests, then builds and runs.
+- `scripts/package_app.sh`: Packages a proper macOS `.app` bundle with Info.plist (Mic + Speech usage descriptions). Launch it with `open dist/Whisper2.app`.
 
 Usage:
 
@@ -25,7 +26,7 @@ chmod +x scripts/*.sh
 
 Notes:
 - The current SPM executable starts an NSApplication and creates a menu bar item; left-click toggles a popover with a live-preview placeholder and right-click opens a menu (Settings, History, Quit).
-- Microphone capture and Apple live transcription are not enabled yet because they require an app bundle with Info.plist usage descriptions and entitlements. The next phase will migrate the app target to an Xcode app bundle and wire in AVAudio and Speech frameworks.
-- OpenAI transcription + cleanup are stubbed and will be implemented once settings UI and on-disk storage solidify.
+- Live preview uses Apple Speech (SFSpeechRecognizer) with AVAudioEngine. For reliable permission prompts, prefer the packaged app (`package_app.sh`) so the system sees usage descriptions.
+- OpenAI transcription + cleanup run after you stop recording. You must set your API key in Settings. Model dropdowns can be refreshed via the API.
 
 See `PLAN.md` for the roadmap and `AGENTS.md` for contribution/commit guidelines.

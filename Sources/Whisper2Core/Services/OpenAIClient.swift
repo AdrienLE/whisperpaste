@@ -66,6 +66,20 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         return text
     }
 
+    public func listModels(apiKey: String) throws -> [String] {
+        var req = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, resp) = try syncRequest(req)
+        guard let http = resp as? HTTPURLResponse else { throw ClientError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else { throw ClientError.http(http.statusCode) }
+        guard let data = data else { throw ClientError.noData }
+        let obj = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+        let arr = (obj?["data"] as? [[String: Any]] ?? [])
+        let ids = arr.compactMap { $0["id"] as? String }
+        return ids.sorted()
+    }
+
     private func syncRequest(_ req: URLRequest) throws -> (Data?, URLResponse?) {
         var outData: Data?
         var outResp: URLResponse?
