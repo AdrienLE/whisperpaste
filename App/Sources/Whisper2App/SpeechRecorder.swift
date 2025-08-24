@@ -102,21 +102,29 @@ final class SpeechRecorder {
         }
 
         engine.prepare()
-        do { try engine.start() } catch { finishWithError(error) }
+        do {
+            try engine.start()
+        } catch {
+            finishWithError(error)
+        }
     }
 
     func stop() {
         guard isRunning else { return }
         isRunning = false
         engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
         request?.endAudio()
-        task?.cancel()
-        task = nil
-        request = nil
-        let url = audioURL
-        audioFile = nil
-        onFinish?(url)
+        // Give recognizer a short moment to deliver final results
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
+            self.engine.stop()
+            self.task?.cancel()
+            self.task = nil
+            self.request = nil
+            let url = self.audioURL
+            self.audioFile = nil
+            DispatchQueue.main.async { self.onFinish?(url) }
+        }
     }
 
     private func finishWithError(_ error: Error) {

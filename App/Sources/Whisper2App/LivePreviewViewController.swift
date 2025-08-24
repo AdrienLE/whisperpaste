@@ -1,35 +1,85 @@
 import AppKit
 
 final class LivePreviewViewController: NSViewController {
+    enum State { case idle, recording, transcribing, cleaning }
+
+    private let statusLabel = NSTextField(labelWithString: "")
+    private let spinner = NSProgressIndicator()
     private let scroll = NSScrollView()
     private let textView = NSTextView()
+    private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
 
     private(set) var currentText: String = ""
+    var onStop: (() -> Void)?
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 160))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 200))
+
+        statusLabel.font = NSFont.systemFont(ofSize: 12)
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.isDisplayedWhenStopped = false
+
+        stopButton.target = self
+        stopButton.action = #selector(didTapStop)
+
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
         textView.isEditable = false
         textView.isSelectable = true
-        textView.string = "Speak to see live preview…"
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
 
-        container.addSubview(scroll)
+        let topRow = NSStackView(views: [statusLabel, spinner, NSView(), stopButton])
+        topRow.orientation = .horizontal
+        topRow.alignment = .centerY
+        topRow.spacing = 8
+        topRow.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView(views: [topRow, scroll])
+        stack.orientation = .vertical
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(stack)
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
-            scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
-            scroll.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10)
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10)
         ])
 
         self.view = container
+        setState(.idle)
+        reset()
+    }
+
+    @objc private func didTapStop() { onStop?() }
+
+    func setState(_ state: State) {
+        switch state {
+        case .idle:
+            statusLabel.stringValue = "Idle"
+            spinner.stopAnimation(nil)
+            stopButton.isHidden = true
+        case .recording:
+            statusLabel.stringValue = "Recording…"
+            spinner.startAnimation(nil)
+            stopButton.isHidden = false
+        case .transcribing:
+            statusLabel.stringValue = "Transcribing with OpenAI…"
+            spinner.startAnimation(nil)
+            stopButton.isHidden = true
+        case .cleaning:
+            statusLabel.stringValue = "Cleaning up text…"
+            spinner.startAnimation(nil)
+            stopButton.isHidden = true
+        }
     }
 
     func update(text: String) {
         currentText = text
-        textView.string = text
+        textView.string = text.isEmpty ? "Speak to see live preview…" : text
     }
 
     func reset() {

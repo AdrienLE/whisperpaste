@@ -62,31 +62,70 @@ final class MenuBarController: NSObject {
             isRecording = false
             recorder?.stop()
             popover.performClose(nil)
-            // Save a fake record for now to exercise storage
-            let text = previewVC.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let audioPath = recorder?.recordedFileURL?.path
-            let settings = settingsStore.load()
-            if !settings.keepAudioFiles, let path = audioPath {
-                try? FileManager.default.removeItem(atPath: path)
-            }
-            if !text.isEmpty {
-                let cleaned = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-                let record = TranscriptionRecord(rawText: text, cleanedText: cleaned, audioFilePath: settings.keepAudioFiles ? audioPath : nil)
-                try? historyStore.append(record)
-            }
-            previewVC.reset()
+            runTranscriptionPipeline()
         } else {
             isRecording = true
             let rec = SpeechRecorder(historyStore: historyStore, settingsStore: settingsStore)
-            rec.onPreview = { [weak self] text in self?.previewVC.update(text: text) }
+            rec.onPreview = { [weak self] text in
+                DispatchQueue.main.async { self?.previewVC.update(text: text) }
+            }
             rec.onError = { error in NSLog("Speech error: \(error)") }
             rec.onFinish = { [weak self] _ in /* no-op, handled on stop */ self?.isRecording = false }
             recorder = rec
             rec.start()
+            previewVC.setState(.recording)
             if !popover.isShown {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
             }
+            previewVC.onStop = { [weak self] in self?.toggleRecording() }
         }
+    }
+
+    private func runTranscriptionPipeline() {
+        previewVC.setState(.transcribing)
+        let settings = settingsStore.load()
+        guard let audioURL = recorder?.recordedFileURL else {
+            // Fallback: no audio captured, use preview text
+            finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: nil)
+            return
+        }
+        guard let key = settings.openAIKey, !key.isEmpty else {
+            // No API key, use preview text
+            finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil)
+            if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+            return
+        }
+
+        let client = OpenAIClient()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            do {
+                let raw = try client.transcribe(apiKey: key, audioFileURL: audioURL, model: settings.transcriptionModel)
+                DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
+                let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
+                DispatchQueue.main.async {
+                    self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil)
+                    if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    NSLog("OpenAI pipeline error: \(error)")
+                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil)
+                    if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                }
+            }
+        }
+    }
+
+    private func finalizeRecord(raw: String, cleaned: String, audioURL: URL?) {
+        let trimmedRaw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedClean = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedRaw.isEmpty || !trimmedClean.isEmpty {
+            let record = TranscriptionRecord(rawText: trimmedRaw, cleanedText: trimmedClean, audioFilePath: audioURL?.path)
+            try? historyStore.append(record)
+        }
+        previewVC.reset()
+        previewVC.setState(.idle)
     }
 
     @objc private func openSettings() {
