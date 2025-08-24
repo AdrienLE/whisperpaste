@@ -48,7 +48,7 @@ public final class HistoryStore {
     }
 
     public func cleanMissingAudioReferences() throws {
-        var all = load()
+        let all = load()
         let kept = all.filter { record in
             guard let path = record.audioFilePath else { return true }
             return fm.fileExists(atPath: path)
