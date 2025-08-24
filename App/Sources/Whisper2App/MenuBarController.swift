@@ -12,6 +12,7 @@ final class MenuBarController: NSObject {
 
     private let settingsStore = SettingsStore()
     private let historyStore = HistoryStore()
+    private var settingsWC: SettingsWindowController?
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -29,6 +30,15 @@ final class MenuBarController: NSObject {
 
         popover.contentViewController = previewVC
         popover.behavior = .transient
+
+        // Enforce API key on launch
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            let s = self.settingsStore.load()
+            if (s.openAIKey ?? "").isEmpty {
+                self.presentSettings(force: true)
+            }
+        }
     }
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -58,6 +68,13 @@ final class MenuBarController: NSObject {
 
     private func toggleRecording() {
         guard let button = statusItem.button else { return }
+        // Must have API key to proceed with transcription
+        let s = settingsStore.load()
+        if (s.openAIKey ?? "").isEmpty {
+            presentSettings(force: true)
+            NSSound.beep()
+            return
+        }
         if isRecording {
             isRecording = false
             recorder?.stop()
@@ -128,8 +145,16 @@ final class MenuBarController: NSObject {
         previewVC.setState(.idle)
     }
 
-    @objc private func openSettings() {
-        SettingsWindowController(settingsStore: settingsStore).show()
+    @objc private func openSettings() { presentSettings(force: false) }
+
+    private func presentSettings(force: Bool) {
+        if settingsWC == nil {
+            let wc = SettingsWindowController(settingsStore: settingsStore)
+            wc.onSaved = { [weak self] _ in self?.settingsWC = nil }
+            settingsWC = wc
+        }
+        settingsWC?.show()
+        if force { NSApp.activate(ignoringOtherApps: true) }
     }
 
     @objc private func openHistory() {
@@ -138,32 +163,5 @@ final class MenuBarController: NSObject {
 
     @objc private func quit() {
         NSApp.terminate(nil)
-    }
-}
-
-// Stub recorder to simulate live preview output.
-final class StubRecorder {
-    private var timer: Timer?
-    private var words = [
-        "hello", "world", "swift", "menu", "bar", "app",
-        "dictation", "transcribe", "preview", "testing", "skeleton"
-    ]
-    private var current = ""
-
-    func start(update: @escaping (String) -> Void) {
-        current.removeAll(keepingCapacity: true)
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            if let w = self.words.randomElement() {
-                self.current += (self.current.isEmpty ? "" : " ") + w
-                update(self.current)
-            }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
     }
 }

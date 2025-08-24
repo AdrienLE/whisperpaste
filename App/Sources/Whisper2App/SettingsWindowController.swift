@@ -5,17 +5,21 @@ final class SettingsWindowController: NSWindowController {
     private let settingsStore: SettingsStore
     private var settings: Settings
 
+    // Controls
     private let apiKeyField = NSSecureTextField()
-    private let transcriptionModelField = NSTextField()
-    private let cleanupModelField = NSTextField()
-    private let promptField = NSTextField()
+    private let transcriptionPopup = NSPopUpButton()
+    private let cleanupPopup = NSPopUpButton()
+    private let promptTextView = NSTextView()
+    private let promptScroll = NSScrollView()
     private let keepAudioCheckbox = NSButton(checkboxWithTitle: "Keep audio files", target: nil, action: nil)
     private let hotkeyField = NSTextField()
+
+    var onSaved: ((Settings) -> Void)?
 
     init(settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
         self.settings = settingsStore.load()
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 300),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
                               styleMask: [.titled, .closable],
                               backing: .buffered, defer: false)
         window.title = "Whisper2 Settings"
@@ -34,62 +38,107 @@ final class SettingsWindowController: NSWindowController {
 
     private func setupUI() {
         guard let content = window?.contentView else { return }
-        let grid = NSGridView(views: [
-            [label("OpenAI API Key:"), apiKeyField],
-            [label("Transcription Model:"), transcriptionModelField],
-            [label("Cleanup Model:"), cleanupModelField],
-            [label("Cleanup Prompt:"), promptField],
-            [label("Hotkey:"), hotkeyField]
-        ])
-        grid.translatesAutoresizingMaskIntoConstraints = false
-        grid.rowSpacing = 8
-        grid.columnSpacing = 12
+
+        let rows: [NSView] = [
+            makeRow(title: "OpenAI API Key:", field: apiKeyField),
+            makeRow(title: "Transcription Model:", field: transcriptionPopup),
+            makeRow(title: "Cleanup Model:", field: cleanupPopup),
+            makePromptSection(),
+            makeRow(title: "Hotkey:", field: hotkeyField),
+            keepAudioCheckbox
+        ]
+        let vstack = NSStackView(views: rows)
+        vstack.orientation = .vertical
+        vstack.spacing = 12
+        vstack.translatesAutoresizingMaskIntoConstraints = false
 
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveTapped))
         saveButton.bezelStyle = .rounded
-        let stack = NSStackView(views: [grid, keepAudioCheckbox, saveButton])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(stack)
+        saveButton.keyEquivalent = "\r"
+        saveButton.translatesAutoresizingMaskIntoConstraints = false
+
+        content.addSubview(vstack)
+        content.addSubview(saveButton)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
-            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -16),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -16)
+            vstack.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
+            vstack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            vstack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            saveButton.topAnchor.constraint(greaterThanOrEqualTo: vstack.bottomAnchor, constant: 12),
+            saveButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            saveButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16)
         ])
+
+        // Configure fields
         apiKeyField.placeholderString = "sk-..."
-        transcriptionModelField.placeholderString = "whisper-1"
-        cleanupModelField.placeholderString = "gpt-4o-mini"
-        promptField.placeholderString = "Rewrite text for clarity and grammar."
+        apiKeyField.translatesAutoresizingMaskIntoConstraints = false
+        apiKeyField.controlSize = .regular
+        apiKeyField.isBezeled = true
+
+        transcriptionPopup.addItems(withTitles: ["whisper-1", "gpt-4o-mini-transcribe"]) 
+        cleanupPopup.addItems(withTitles: ["gpt-4o-mini", "gpt-4o"]) 
+
+        promptTextView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        promptTextView.isVerticallyResizable = true
+        promptTextView.isHorizontallyResizable = false
+        promptScroll.documentView = promptTextView
+        promptScroll.hasVerticalScroller = true
+        promptScroll.translatesAutoresizingMaskIntoConstraints = false
+        promptScroll.heightAnchor.constraint(equalToConstant: 120).isActive = true
+
         hotkeyField.placeholderString = "ctrl+shift+space"
     }
 
-    private func label(_ text: String) -> NSTextField {
-        let l = NSTextField(labelWithString: text)
-        l.alignment = .right
-        return l
+    private func makeRow(title: String, field: NSView) -> NSView {
+        let label = NSTextField(labelWithString: title)
+        label.alignment = .right
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let row = NSStackView(views: [label, field])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        if let tf = field as? NSTextField { tf.translatesAutoresizingMaskIntoConstraints = false; tf.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true }
+        if let popup = field as? NSPopUpButton { popup.translatesAutoresizingMaskIntoConstraints = false; popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true }
+        return row
+    }
+
+    private func makePromptSection() -> NSView {
+        let label = NSTextField(labelWithString: "Cleanup Prompt:")
+        label.alignment = .left
+        let v = NSStackView(views: [label, promptScroll])
+        v.orientation = .vertical
+        v.spacing = 6
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
     }
 
     private func loadValues() {
         apiKeyField.stringValue = settings.openAIKey ?? ""
-        transcriptionModelField.stringValue = settings.transcriptionModel
-        cleanupModelField.stringValue = settings.cleanupModel
-        promptField.stringValue = settings.cleanupPrompt
+        if !transcriptionPopup.itemTitles.contains(settings.transcriptionModel) {
+            transcriptionPopup.addItem(withTitle: settings.transcriptionModel)
+        }
+        transcriptionPopup.selectItem(withTitle: settings.transcriptionModel)
+        if !cleanupPopup.itemTitles.contains(settings.cleanupModel) {
+            cleanupPopup.addItem(withTitle: settings.cleanupModel)
+        }
+        cleanupPopup.selectItem(withTitle: settings.cleanupModel)
+        promptTextView.string = settings.cleanupPrompt
         keepAudioCheckbox.state = settings.keepAudioFiles ? .on : .off
         hotkeyField.stringValue = settings.hotkey
     }
 
     @objc private func saveTapped() {
         settings.openAIKey = apiKeyField.stringValue.isEmpty ? nil : apiKeyField.stringValue
-        settings.transcriptionModel = transcriptionModelField.stringValue
-        settings.cleanupModel = cleanupModelField.stringValue
-        settings.cleanupPrompt = promptField.stringValue
+        settings.transcriptionModel = transcriptionPopup.titleOfSelectedItem ?? settings.transcriptionModel
+        settings.cleanupModel = cleanupPopup.titleOfSelectedItem ?? settings.cleanupModel
+        settings.cleanupPrompt = promptTextView.string
         settings.keepAudioFiles = (keepAudioCheckbox.state == .on)
         settings.hotkey = hotkeyField.stringValue
         do {
             try settingsStore.save(settings)
+            onSaved?(settings)
+            self.window?.close()
         } catch {
             NSSound.beep()
         }
