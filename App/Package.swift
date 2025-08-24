@@ -19,7 +19,8 @@ let package = Package(
             path: "Sources/Whisper2App",
             linkerSettings: [
                 .linkedFramework("AppKit"),
-                .linkedFramework("AVFoundation")
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("Speech")
             ]
         )
     ]

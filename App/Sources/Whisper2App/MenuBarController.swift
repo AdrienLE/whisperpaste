@@ -8,7 +8,7 @@ final class MenuBarController: NSObject {
     private var eventMonitor: Any?
     private var isRecording = false
     private let previewVC = LivePreviewViewController()
-    private let recorder = StubRecorder()
+    private var recorder: SpeechRecorder?
 
     private let settingsStore = SettingsStore()
     private let historyStore = HistoryStore()
@@ -60,21 +60,29 @@ final class MenuBarController: NSObject {
         guard let button = statusItem.button else { return }
         if isRecording {
             isRecording = false
-            recorder.stop()
+            recorder?.stop()
             popover.performClose(nil)
             // Save a fake record for now to exercise storage
             let text = previewVC.currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let audioPath = recorder?.recordedFileURL?.path
+            let settings = settingsStore.load()
+            if !settings.keepAudioFiles, let path = audioPath {
+                try? FileManager.default.removeItem(atPath: path)
+            }
             if !text.isEmpty {
                 let cleaned = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-                let record = TranscriptionRecord(rawText: text, cleanedText: cleaned, audioFilePath: nil)
+                let record = TranscriptionRecord(rawText: text, cleanedText: cleaned, audioFilePath: settings.keepAudioFiles ? audioPath : nil)
                 try? historyStore.append(record)
-                previewVC.reset()
             }
+            previewVC.reset()
         } else {
             isRecording = true
-            recorder.start { [weak self] preview in
-                self?.previewVC.update(text: preview)
-            }
+            let rec = SpeechRecorder(historyStore: historyStore, settingsStore: settingsStore)
+            rec.onPreview = { [weak self] text in self?.previewVC.update(text: text) }
+            rec.onError = { error in NSLog("Speech error: \(error)") }
+            rec.onFinish = { [weak self] _ in /* no-op, handled on stop */ self?.isRecording = false }
+            recorder = rec
+            rec.start()
             if !popover.isShown {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
             }
