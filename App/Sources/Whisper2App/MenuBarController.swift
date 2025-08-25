@@ -9,6 +9,7 @@ final class MenuBarController: NSObject {
     private var isRecording = false
     private let previewVC = LivePreviewViewController()
     private var recorder: SpeechRecorder?
+    private let hotkeyManager = HotkeyManager()
 
     private let settingsStore = SettingsStore()
     private let historyStore = HistoryStore()
@@ -38,6 +39,7 @@ final class MenuBarController: NSObject {
             if (s.openAIKey ?? "").isEmpty {
                 self.presentSettings(force: true)
             }
+            self.registerHotkey(from: s.hotkey)
         }
     }
 
@@ -52,7 +54,9 @@ final class MenuBarController: NSObject {
 
     private func showMenu() {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: isRecording ? "Stop" : "Start", action: #selector(menuToggleRecording), keyEquivalent: ""))
+        let startStop = NSMenuItem(title: isRecording ? "Stop" : "Start", action: #selector(menuToggleRecording), keyEquivalent: "")
+        startStop.isEnabled = !(settingsStore.load().openAIKey ?? "").isEmpty
+        menu.addItem(startStop)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "History", action: #selector(openHistory), keyEquivalent: "h"))
@@ -86,11 +90,15 @@ final class MenuBarController: NSObject {
             rec.onPreview = { [weak self] text in
                 DispatchQueue.main.async { self?.previewVC.update(text: text) }
             }
-            rec.onError = { error in NSLog("Speech error: \(error)") }
+            rec.onError = { [weak self] error in
+                NSLog("Speech error: \(error)")
+                DispatchQueue.main.async { self?.previewVC.setState(.error(error.localizedDescription)) }
+            }
             rec.onFinish = { [weak self] _ in /* no-op, handled on stop */ self?.isRecording = false }
             recorder = rec
             rec.start()
             previewVC.setState(.recording)
+            setRecordingIcon(true)
             if !popover.isShown {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
             }
@@ -127,6 +135,7 @@ final class MenuBarController: NSObject {
             } catch {
                 DispatchQueue.main.async {
                     NSLog("OpenAI pipeline error: \(error)")
+                    self.previewVC.setState(.error("Transcription failed"))
                     self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil)
                     if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
                 }
@@ -143,6 +152,7 @@ final class MenuBarController: NSObject {
         }
         previewVC.reset()
         previewVC.setState(.idle)
+        setRecordingIcon(false)
     }
 
     @objc private func openSettings() { presentSettings(force: false) }
@@ -150,7 +160,10 @@ final class MenuBarController: NSObject {
     private func presentSettings(force: Bool) {
         if settingsWC == nil {
             let wc = SettingsWindowController(settingsStore: settingsStore)
-            wc.onSaved = { [weak self] _ in self?.settingsWC = nil }
+            wc.onSaved = { [weak self] s in
+                self?.settingsWC = nil
+                self?.registerHotkey(from: s.hotkey)
+            }
             settingsWC = wc
         }
         settingsWC?.show()
@@ -163,5 +176,23 @@ final class MenuBarController: NSObject {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func setRecordingIcon(_ recording: Bool) {
+        guard let button = statusItem.button else { return }
+        let name = recording ? "record.circle" : "waveform"
+        if let img = NSImage(systemSymbolName: name, accessibilityDescription: "Whisper2") {
+            img.isTemplate = true
+            button.image = img
+        } else {
+            button.title = recording ? "●" : "W2"
+        }
+    }
+
+    private func registerHotkey(from string: String) {
+        let hk = Hotkey.parse(string)
+        hotkeyManager.register(hotkey: hk) { [weak self] in
+            DispatchQueue.main.async { self?.toggleRecording() }
+        }
     }
 }

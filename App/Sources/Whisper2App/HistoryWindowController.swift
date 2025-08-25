@@ -1,9 +1,11 @@
 import AppKit
+import AVFoundation
 import Whisper2Core
 
 final class HistoryWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private let historyStore: HistoryStore
     private var items: [TranscriptionRecord] = []
+    private var player: AVAudioPlayer?
 
     private let table = NSTableView()
     private let scroll = NSScrollView()
@@ -55,6 +57,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let buttons = NSStackView(views: [
             NSButton(title: "Copy Raw", target: self, action: #selector(copyRaw)),
             NSButton(title: "Copy Cleaned", target: self, action: #selector(copyCleaned)),
+            NSButton(title: "Play", target: self, action: #selector(playAudio)),
+            NSButton(title: "Reveal", target: self, action: #selector(revealAudio)),
+            NSButton(title: "Clean Missing", target: self, action: #selector(cleanMissing)),
             NSButton(title: "Refresh", target: self, action: #selector(refresh))
         ])
         buttons.orientation = .horizontal
@@ -110,6 +115,19 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func copyRaw() { copy(column: \.rawText) }
     @objc private func copyCleaned() { copy(column: \.cleanedText) }
     @objc private func refresh() { reload() }
+    @objc private func cleanMissing() { try? historyStore.cleanMissingAudioReferences(); reload() }
+    @objc private func playAudio() {
+        guard let path = selectedAudioPath() else { NSSound.beep(); return }
+        do {
+            player = try AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
+            player?.prepareToPlay()
+            player?.play()
+        } catch { NSSound.beep() }
+    }
+    @objc private func revealAudio() {
+        guard let path = selectedAudioPath() else { NSSound.beep(); return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
 
     private func copy(column: KeyPath<TranscriptionRecord, String>) {
         let row = table.selectedRow
@@ -117,5 +135,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let paste = NSPasteboard.general
         paste.clearContents()
         paste.setString(items[row][keyPath: column], forType: .string)
+    }
+
+    private func selectedAudioPath() -> String? {
+        let row = table.selectedRow
+        guard row >= 0, row < items.count else { return nil }
+        guard let path = items[row].audioFilePath, FileManager.default.fileExists(atPath: path) else { return nil }
+        return path
     }
 }

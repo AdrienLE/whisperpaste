@@ -1,7 +1,7 @@
 import AppKit
 
 final class LivePreviewViewController: NSViewController {
-    enum State { case idle, recording, transcribing, cleaning }
+    enum State { case idle, recording, transcribing, cleaning, error(String) }
 
     private let statusLabel = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
@@ -73,6 +73,10 @@ final class LivePreviewViewController: NSViewController {
         case .cleaning:
             statusLabel.stringValue = "Cleaning up text…"
             spinner.startAnimation(nil)
+            stopButton.isHidden = true
+        case .error(let msg):
+            statusLabel.stringValue = "Error: \(msg)"
+            spinner.stopAnimation(nil)
             stopButton.isHidden = true
         }
     }
