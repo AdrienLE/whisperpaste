@@ -27,14 +27,15 @@ final class LivePreviewViewController: NSViewController {
 
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
+        scroll.drawsBackground = true
+        scroll.backgroundColor = NSColor.windowBackgroundColor
         scroll.translatesAutoresizingMaskIntoConstraints = false
         textView.isEditable = false
         textView.isSelectable = true
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        textView.drawsBackground = true
-        textView.backgroundColor = NSColor.textBackgroundColor
+        textView.drawsBackground = false
         textView.textColor = NSColor.labelColor
+        textView.insertionPointColor = NSColor.labelColor
         textView.isRichText = false
         textView.usesFontPanel = false
 

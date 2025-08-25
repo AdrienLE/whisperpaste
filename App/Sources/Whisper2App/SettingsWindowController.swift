@@ -80,10 +80,15 @@ final class SettingsWindowController: NSWindowController {
         promptTextView.isEditable = true
         promptTextView.isVerticallyResizable = true
         promptTextView.isHorizontallyResizable = false
+        promptTextView.isRichText = false
+        promptTextView.drawsBackground = true
+        promptTextView.backgroundColor = NSColor.textBackgroundColor
+        promptTextView.textColor = NSColor.labelColor
+        promptTextView.insertionPointColor = NSColor.labelColor
         promptScroll.documentView = promptTextView
         promptScroll.hasVerticalScroller = true
         promptScroll.translatesAutoresizingMaskIntoConstraints = false
-        promptScroll.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        promptScroll.heightAnchor.constraint(equalToConstant: 220).isActive = true
 
         hotkeyField.placeholderString = "ctrl+shift+space"
         hotkeyRecorder.onChange = { [weak self] combo in self?.hotkeyField.stringValue = combo }
