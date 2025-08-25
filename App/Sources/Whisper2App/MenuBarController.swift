@@ -30,7 +30,7 @@ final class MenuBarController: NSObject {
         }
 
         popover.contentViewController = previewVC
-        popover.behavior = .transient
+        popover.behavior = .semitransient
 
         // Enforce API key on launch
         DispatchQueue.main.async { [weak self] in
@@ -54,10 +54,6 @@ final class MenuBarController: NSObject {
 
     private func showMenu() {
         let menu = NSMenu()
-        let startStop = NSMenuItem(title: isRecording ? "Stop" : "Start", action: #selector(menuToggleRecording), keyEquivalent: "")
-        startStop.isEnabled = !(settingsStore.load().openAIKey ?? "").isEmpty
-        menu.addItem(startStop)
-        menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "History", action: #selector(openHistory), keyEquivalent: "h"))
         menu.addItem(NSMenuItem.separator())
@@ -82,7 +78,11 @@ final class MenuBarController: NSObject {
         if isRecording {
             isRecording = false
             recorder?.stop()
-            popover.performClose(nil)
+            // Keep popover open and show transcribing state
+            previewVC.setState(.transcribing)
+            if !popover.isShown, let button = statusItem.button {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
+            }
             runTranscriptionPipeline()
         } else {
             isRecording = true
@@ -149,6 +149,13 @@ final class MenuBarController: NSObject {
         if !trimmedRaw.isEmpty || !trimmedClean.isEmpty {
             let record = TranscriptionRecord(rawText: trimmedRaw, cleanedText: trimmedClean, audioFilePath: audioURL?.path)
             try? historyStore.append(record)
+            // Copy cleaned (or raw) text to clipboard after processing
+            let textToCopy = trimmedClean.isEmpty ? trimmedRaw : trimmedClean
+            if !textToCopy.isEmpty {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(textToCopy, forType: .string)
+            }
         }
         previewVC.reset()
         previewVC.setState(.idle)
