@@ -26,8 +26,8 @@ final class MultilineTextEditor: NSView {
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.isRichText = false
         textView.usesFontPanel = false
-        textView.automaticQuoteSubstitutionEnabled = false
-        textView.automaticDashSubstitutionEnabled = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
         textView.textColor = NSColor.labelColor
         textView.insertionPointColor = NSColor.labelColor
         textView.drawsBackground = true
@@ -67,4 +67,3 @@ final class MultilineTextEditor: NSView {
         set { textView.string = newValue }
     }
 }
-
