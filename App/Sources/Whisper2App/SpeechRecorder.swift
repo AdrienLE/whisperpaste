@@ -5,7 +5,7 @@ import Whisper2Core
 
 final class SpeechRecorder {
     private let engine = AVAudioEngine()
-    private let recognizer: SFSpeechRecognizer?
+    private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var audioFile: AVAudioFile?
@@ -25,7 +25,7 @@ final class SpeechRecorder {
     init(historyStore: HistoryStore, settingsStore: SettingsStore) {
         self.historyStore = historyStore
         self.settingsStore = settingsStore
-        self.recognizer = SFSpeechRecognizer(locale: Locale.current)
+        self.recognizer = SFSpeechRecognizer(locale: Locale.current) ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
 
     func start() {
@@ -72,6 +72,7 @@ final class SpeechRecorder {
 
         // Recognition task
         if let recognizer = recognizer, recognizer.isAvailable, let request = request {
+            onPreview?("Listening…")
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 guard let self = self else { return }
                 if let r = result {
@@ -82,10 +83,10 @@ final class SpeechRecorder {
                 if let error = error {
                     self.finishWithError(error)
                 }
-                if result?.isFinal == true {
-                    self.stop()
-                }
+                // Do not auto-stop here; stopping is user-controlled.
             }
+        } else {
+            onPreview?("Live preview unavailable for current locale")
         }
 
         // File for writing

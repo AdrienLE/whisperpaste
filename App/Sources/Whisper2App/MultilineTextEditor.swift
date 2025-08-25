@@ -31,7 +31,7 @@ final class MultilineTextEditor: NSView {
         textView.textColor = NSColor.labelColor
         textView.insertionPointColor = NSColor.labelColor
         textView.drawsBackground = true
-        textView.backgroundColor = NSColor.controlBackgroundColor
+        textView.backgroundColor = NSColor.textBackgroundColor
         textView.translatesAutoresizingMaskIntoConstraints = false
 
         NotificationCenter.default.addObserver(self, selector: #selector(textDidChange(_:)), name: NSText.didChangeNotification, object: textView)
@@ -39,7 +39,8 @@ final class MultilineTextEditor: NSView {
         // Configure scroll view
         scroll.borderType = .bezelBorder
         scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
+        scroll.drawsBackground = true
+        scroll.backgroundColor = NSColor.textBackgroundColor
         scroll.documentView = textView
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
@@ -60,6 +61,11 @@ final class MultilineTextEditor: NSView {
     override func becomeFirstResponder() -> Bool {
         window?.makeFirstResponder(textView)
         return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(textView)
+        textView.mouseDown(with: event)
     }
 
     var string: String {
