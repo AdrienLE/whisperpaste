@@ -27,6 +27,7 @@ final class LivePreviewViewController: NSViewController {
 
         scroll.documentView = textView
         scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
         textView.isEditable = false
         textView.isSelectable = true
@@ -57,8 +58,9 @@ final class LivePreviewViewController: NSViewController {
         ])
 
         self.view = container
-        setState(.idle)
-        reset()
+        // Initialize visuals without overriding externally-set state
+        statusLabel.stringValue = (state == .idle) ? "Idle" : statusLabel.stringValue
+        if currentText.isEmpty { textView.string = "Speak to see live preview…" } else { textView.string = currentText }
     }
 
     @objc private func didTapStop() { onStop?() }

@@ -109,11 +109,11 @@ final class MenuBarController: NSObject {
             rec.onFinish = { [weak self] _ in /* no-op, handled on stop */ self?.isRecording = false }
             recorder = rec
             rec.start()
-            previewVC.setState(.recording)
             setRecordingIcon(true)
             if !popover.isShown {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
             }
+            previewVC.setState(.recording)
             previewVC.onStop = { [weak self] in self?.toggleRecording() }
         }
     }
