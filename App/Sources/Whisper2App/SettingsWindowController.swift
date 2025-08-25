@@ -9,8 +9,7 @@ final class SettingsWindowController: NSWindowController {
     private let apiKeyField = PasteCapableSecureTextField()
     private let transcriptionPopup = NSPopUpButton()
     private let cleanupPopup = NSPopUpButton()
-    private let promptTextView = PasteCapableTextView()
-    private let promptScroll = NSScrollView()
+    private let promptEditor = MultilineTextEditor(editable: true)
     private let keepAudioCheckbox = NSButton(checkboxWithTitle: "Keep audio files", target: nil, action: nil)
     private let hotkeyField = NSTextField()
 
@@ -76,19 +75,9 @@ final class SettingsWindowController: NSWindowController {
         transcriptionPopup.addItems(withTitles: ["whisper-1"]) // will be refreshed
         cleanupPopup.addItems(withTitles: ["gpt-4o-mini"]) // will be refreshed
 
-        promptTextView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        promptTextView.isEditable = true
-        promptTextView.isVerticallyResizable = true
-        promptTextView.isHorizontallyResizable = false
-        promptTextView.isRichText = false
-        promptTextView.drawsBackground = true
-        promptTextView.backgroundColor = NSColor.textBackgroundColor
-        promptTextView.textColor = NSColor.labelColor
-        promptTextView.insertionPointColor = NSColor.labelColor
-        promptScroll.documentView = promptTextView
-        promptScroll.hasVerticalScroller = true
-        promptScroll.translatesAutoresizingMaskIntoConstraints = false
-        promptScroll.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        promptEditor.translatesAutoresizingMaskIntoConstraints = false
+        promptEditor.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        promptEditor.onChange = { [weak self] text in self?.settings.cleanupPrompt = text }
 
         hotkeyField.placeholderString = "ctrl+shift+space"
         hotkeyRecorder.onChange = { [weak self] combo in self?.hotkeyField.stringValue = combo }
@@ -112,7 +101,7 @@ final class SettingsWindowController: NSWindowController {
     private func makePromptSection() -> NSView {
         let label = NSTextField(labelWithString: "Cleanup Prompt:")
         label.alignment = .left
-        let v = NSStackView(views: [label, promptScroll])
+        let v = NSStackView(views: [label, promptEditor])
         v.orientation = .vertical
         v.spacing = 6
         v.translatesAutoresizingMaskIntoConstraints = false
@@ -152,7 +141,7 @@ final class SettingsWindowController: NSWindowController {
             cleanupPopup.addItem(withTitle: settings.cleanupModel)
         }
         cleanupPopup.selectItem(withTitle: settings.cleanupModel)
-        promptTextView.string = settings.cleanupPrompt
+        promptEditor.string = settings.cleanupPrompt
         keepAudioCheckbox.state = settings.keepAudioFiles ? .on : .off
         hotkeyField.stringValue = settings.hotkey
         hotkeyRecorder.hotkeyString = settings.hotkey
@@ -162,7 +151,7 @@ final class SettingsWindowController: NSWindowController {
         settings.openAIKey = apiKeyField.stringValue.isEmpty ? nil : apiKeyField.stringValue
         settings.transcriptionModel = transcriptionPopup.titleOfSelectedItem ?? settings.transcriptionModel
         settings.cleanupModel = cleanupPopup.titleOfSelectedItem ?? settings.cleanupModel
-        settings.cleanupPrompt = promptTextView.string
+        settings.cleanupPrompt = promptEditor.string
         settings.keepAudioFiles = (keepAudioCheckbox.state == .on)
         settings.hotkey = hotkeyField.stringValue
         do {

@@ -5,8 +5,7 @@ final class LivePreviewViewController: NSViewController {
 
     private let statusLabel = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
-    private let scroll = NSScrollView()
-    private let textView = NSTextView()
+    private let editor = MultilineTextEditor(editable: false)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
 
     private(set) var currentText: String = ""
@@ -25,27 +24,13 @@ final class LivePreviewViewController: NSViewController {
         stopButton.target = self
         stopButton.action = #selector(didTapStop)
 
-        scroll.documentView = textView
-        scroll.hasVerticalScroller = true
-        scroll.drawsBackground = true
-        scroll.backgroundColor = NSColor.windowBackgroundColor
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        textView.drawsBackground = false
-        textView.textColor = NSColor.labelColor
-        textView.insertionPointColor = NSColor.labelColor
-        textView.isRichText = false
-        textView.usesFontPanel = false
-
         let topRow = NSStackView(views: [statusLabel, spinner, NSView(), stopButton])
         topRow.orientation = .horizontal
         topRow.alignment = .centerY
         topRow.spacing = 8
         topRow.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [topRow, scroll])
+        let stack = NSStackView(views: [topRow, editor])
         stack.orientation = .vertical
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -61,7 +46,7 @@ final class LivePreviewViewController: NSViewController {
         self.view = container
         // Initialize visuals without overriding externally-set state
         statusLabel.stringValue = (state == .idle) ? "Idle" : statusLabel.stringValue
-        if currentText.isEmpty { textView.string = "Speak to see live preview…" } else { textView.string = currentText }
+        if currentText.isEmpty { editor.string = "Speak to see live preview…" } else { editor.string = currentText }
     }
 
     @objc private func didTapStop() { onStop?() }
@@ -94,11 +79,11 @@ final class LivePreviewViewController: NSViewController {
 
     func update(text: String) {
         currentText = text
-        textView.string = text.isEmpty ? "Speak to see live preview…" : text
+        editor.string = text.isEmpty ? "Speak to see live preview…" : text
     }
 
     func reset() {
         currentText = ""
-        textView.string = "Speak to see live preview…"
+        editor.string = "Speak to see live preview…"
     }
 }
