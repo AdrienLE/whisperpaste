@@ -67,6 +67,8 @@ final class SpeechRecorder {
         // Recognition request
         request = SFSpeechAudioBufferRecognitionRequest()
         request?.shouldReportPartialResults = true
+        request?.requiresOnDeviceRecognition = false
+        request?.taskHint = .dictation
 
         // Recognition task
         if let recognizer = recognizer, recognizer.isAvailable, let request = request {

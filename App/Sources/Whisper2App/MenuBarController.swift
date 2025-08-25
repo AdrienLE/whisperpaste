@@ -77,6 +77,16 @@ final class MenuBarController: NSObject {
             NSSound.beep()
             return
         }
+        // If we are currently processing (transcribing/cleaning), ignore toggle and keep popover visible
+        switch previewVC.state {
+        case .transcribing, .cleaning:
+            if !popover.isShown {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
+            }
+            return
+        default:
+            break
+        }
         if isRecording {
             isRecording = false
             recorder?.stop()

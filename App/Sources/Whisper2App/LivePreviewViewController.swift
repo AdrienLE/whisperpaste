@@ -33,6 +33,9 @@ final class LivePreviewViewController: NSViewController {
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.drawsBackground = true
         textView.backgroundColor = NSColor.textBackgroundColor
+        textView.textColor = NSColor.labelColor
+        textView.isRichText = false
+        textView.usesFontPanel = false
 
         let topRow = NSStackView(views: [statusLabel, spinner, NSView(), stopButton])
         topRow.orientation = .horizontal
