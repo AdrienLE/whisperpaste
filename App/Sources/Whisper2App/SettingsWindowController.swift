@@ -170,10 +170,9 @@ final class SettingsWindowController: NSWindowController {
     }
 
     @objc private func refreshModels() {
-        guard let key = (apiKeyField.stringValue.isEmpty ? settings.openAIKey : apiKeyField.stringValue), let apiKey = key, !apiKey.isEmpty else {
-            NSSound.beep()
-            return
-        }
+        let candidate = apiKeyField.stringValue.isEmpty ? (settings.openAIKey ?? "") : apiKeyField.stringValue
+        guard !candidate.isEmpty else { NSSound.beep(); return }
+        let apiKey = candidate
         let client = OpenAIClient()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }

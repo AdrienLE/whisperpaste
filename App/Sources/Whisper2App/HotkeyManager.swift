@@ -20,7 +20,7 @@ final class HotkeyManager {
             return noErr
         }, 1, &eventType, selfPtr, &eventHandler)
 
-        var hotKeyID = EventHotKeyID(signature: OSType(0x57534832), id: UInt32(1)) // 'WSH2'
+        let hotKeyID = EventHotKeyID(signature: OSType(0x57534832), id: UInt32(1)) // 'WSH2'
         RegisterEventHotKey(mapping.keyCode, mapping.modifiers, hotKeyID, GetEventDispatcherTarget(), 0, &currentRef)
     }
 
@@ -85,4 +85,3 @@ final class HotkeyManager {
         }
     }
 }
-
