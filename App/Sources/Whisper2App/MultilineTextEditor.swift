@@ -3,6 +3,7 @@ import AppKit
 final class MultilineTextEditor: NSView {
     let scroll = NSScrollView()
     let textView = NSTextView()
+    private let defaultFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
 
     var onChange: ((String) -> Void)?
 
@@ -23,16 +24,20 @@ final class MultilineTextEditor: NSView {
         // Configure text view appearance and behavior
         textView.isEditable = editable
         textView.isSelectable = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.font = defaultFont
         textView.isRichText = false
         textView.usesFontPanel = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
-        textView.textColor = NSColor.labelColor
-        textView.insertionPointColor = NSColor.labelColor
+        textView.textColor = NSColor.textColor
+        textView.insertionPointColor = NSColor.textColor
         textView.drawsBackground = true
         textView.backgroundColor = NSColor.textBackgroundColor
         textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.typingAttributes = [
+            .foregroundColor: NSColor.textColor,
+            .font: defaultFont
+        ]
 
         NotificationCenter.default.addObserver(self, selector: #selector(textDidChange(_:)), name: NSText.didChangeNotification, object: textView)
 
@@ -55,7 +60,10 @@ final class MultilineTextEditor: NSView {
 
     deinit { NotificationCenter.default.removeObserver(self) }
 
-    @objc private func textDidChange(_ note: Notification) { onChange?(textView.string) }
+    @objc private func textDidChange(_ note: Notification) {
+        applyDefaultAttributes()
+        onChange?(textView.string)
+    }
 
     override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool {
@@ -70,6 +78,20 @@ final class MultilineTextEditor: NSView {
 
     var string: String {
         get { textView.string }
-        set { textView.string = newValue }
+        set {
+            textView.string = newValue
+            applyDefaultAttributes()
+        }
+    }
+
+    private func applyDefaultAttributes() {
+        let length = (textView.string as NSString).length
+        guard length > 0, let storage = textView.textStorage else { return }
+        storage.beginEditing()
+        storage.setAttributes([
+            .foregroundColor: NSColor.textColor,
+            .font: defaultFont
+        ], range: NSRange(location: 0, length: length))
+        storage.endEditing()
     }
 }
