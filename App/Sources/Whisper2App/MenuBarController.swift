@@ -6,6 +6,7 @@ final class MenuBarController: NSObject {
     private(set) var statusItem: NSStatusItem!
     private let popover = NSPopover()
     private var eventMonitor: Any?
+    private var localEventMonitor: Any?
     private var isRecording = false
     private let previewVC = LivePreviewViewController()
     private var recorder: SpeechRecorder?
@@ -30,7 +31,7 @@ final class MenuBarController: NSObject {
         }
 
         popover.contentViewController = previewVC
-        popover.behavior = .semitransient
+        popover.behavior = .applicationDefined
 
         // Enforce API key on launch
         DispatchQueue.main.async { [weak self] in
@@ -40,6 +41,7 @@ final class MenuBarController: NSObject {
                 self.presentSettings(force: true)
             }
             self.registerHotkey(from: s.hotkey)
+            self.installEventMonitors()
         }
     }
 
@@ -200,6 +202,32 @@ final class MenuBarController: NSObject {
         let hk = Hotkey.parse(string)
         hotkeyManager.register(hotkey: hk) { [weak self] in
             DispatchQueue.main.async { self?.toggleRecording() }
+        }
+    }
+
+    private func installEventMonitors() {
+        if eventMonitor == nil {
+            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.maybeClosePopoverOnOutsideClick()
+            }
+        }
+        if localEventMonitor == nil {
+            localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                self?.maybeClosePopoverOnOutsideClick()
+                return event
+            }
+        }
+    }
+
+    private func maybeClosePopoverOnOutsideClick() {
+        guard popover.isShown else { return }
+        if previewVC.state == .idle {
+            popover.performClose(nil)
+        } else {
+            // Keep it open: if it somehow closed, reopen under the status item
+            if let button = statusItem.button, !popover.isShown {
+                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
+            }
         }
     }
 }

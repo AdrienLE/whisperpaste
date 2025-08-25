@@ -1,7 +1,7 @@
 import AppKit
 
 final class LivePreviewViewController: NSViewController {
-    enum State { case idle, recording, transcribing, cleaning, error(String) }
+    enum State: Equatable { case idle, recording, transcribing, cleaning, error(String) }
 
     private let statusLabel = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
@@ -10,12 +10,14 @@ final class LivePreviewViewController: NSViewController {
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
 
     private(set) var currentText: String = ""
+    private(set) var state: State = .idle
     var onStop: (() -> Void)?
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 200))
 
         statusLabel.font = NSFont.systemFont(ofSize: 12)
+        statusLabel.textColor = NSColor.secondaryLabelColor
         spinner.style = .spinning
         spinner.controlSize = .small
         spinner.isDisplayedWhenStopped = false
@@ -29,6 +31,8 @@ final class LivePreviewViewController: NSViewController {
         textView.isEditable = false
         textView.isSelectable = true
         textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.drawsBackground = true
+        textView.backgroundColor = NSColor.textBackgroundColor
 
         let topRow = NSStackView(views: [statusLabel, spinner, NSView(), stopButton])
         topRow.orientation = .horizontal
@@ -57,6 +61,7 @@ final class LivePreviewViewController: NSViewController {
     @objc private func didTapStop() { onStop?() }
 
     func setState(_ state: State) {
+        self.state = state
         switch state {
         case .idle:
             statusLabel.stringValue = "Idle"

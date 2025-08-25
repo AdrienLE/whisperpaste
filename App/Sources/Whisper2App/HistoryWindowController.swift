@@ -130,8 +130,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     private func copy(column: KeyPath<TranscriptionRecord, String>) {
-        let row = table.selectedRow
-        guard row >= 0, row < items.count else { return }
+        var row = table.selectedRow
+        if row < 0 && !items.isEmpty { row = 0 } // default to first entry if none selected
+        guard row >= 0, row < items.count else { NSSound.beep(); return }
         let paste = NSPasteboard.general
         paste.clearContents()
         paste.setString(items[row][keyPath: column], forType: .string)
