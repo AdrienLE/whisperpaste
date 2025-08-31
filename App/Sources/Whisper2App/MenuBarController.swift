@@ -258,6 +258,8 @@ final class MenuBarController: NSObject {
         let outURL = originalURL.deletingPathExtension().appendingPathExtension("m4a")
         try? FileManager.default.removeItem(at: outURL)
         let asset = AVURLAsset(url: originalURL)
+        let duration = CMTimeGetSeconds(asset.duration)
+        NSLog("Pipeline: Source audio duration %.2fs", duration)
         guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
             NSLog("Pipeline: AVAssetExportSession not available for \(originalURL.lastPathComponent)")
             return nil

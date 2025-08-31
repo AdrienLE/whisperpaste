@@ -10,8 +10,9 @@ final class LivePreviewViewController: NSViewController {
     private let copyButton = NSButton(title: "Copy", target: nil, action: nil)
     private let detailsButton = NSButton(title: "Details…", target: nil, action: nil)
     private var recordingIndicatorTimer: Timer?
-    private var indicatorStep = 0 // 0..2 cycling
+    private var indicatorStep = 0
     private var lastErrorDetails: String?
+    private let actionContainer = NSView()
 
     private(set) var currentText: String = ""
     private(set) var state: State = .idle
@@ -36,10 +37,28 @@ final class LivePreviewViewController: NSViewController {
 
         copyButton.target = self
         copyButton.action = #selector(copyCurrentText)
-        copyButton.bezelStyle = .inline
+        copyButton.bezelStyle = .rounded
         copyButton.isHidden = true
 
-        let topRow = NSStackView(views: [statusLabel, spinner, detailsButton, NSView(), copyButton, stopButton])
+        // Trailing action container to hold Stop/Copy in the same spot
+        actionContainer.translatesAutoresizingMaskIntoConstraints = false
+        stopButton.translatesAutoresizingMaskIntoConstraints = false
+        copyButton.translatesAutoresizingMaskIntoConstraints = false
+        actionContainer.addSubview(stopButton)
+        actionContainer.addSubview(copyButton)
+        NSLayoutConstraint.activate([
+            stopButton.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor),
+            stopButton.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
+            stopButton.topAnchor.constraint(equalTo: actionContainer.topAnchor),
+            stopButton.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor),
+            copyButton.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor),
+            copyButton.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
+            copyButton.topAnchor.constraint(equalTo: actionContainer.topAnchor),
+            copyButton.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor),
+            actionContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 68)
+        ])
+
+        let topRow = NSStackView(views: [statusLabel, spinner, detailsButton, NSView(), actionContainer])
         topRow.orientation = .horizontal
         topRow.alignment = .centerY
         topRow.spacing = 8
@@ -63,9 +82,8 @@ final class LivePreviewViewController: NSViewController {
         statusLabel.stringValue = (state == .idle) ? "Idle" : statusLabel.stringValue
         if currentText.isEmpty { editor.string = "Speak to see live preview…" } else { editor.string = currentText }
         editor.autoScrollToEnd = true
-        // Keep Stop button space reserved to avoid layout jumps
-        stopButton.isBordered = true
-        stopButton.alphaValue = 0.0
+        // Initialize trailing action placement
+        stopButton.isHidden = true
         stopButton.isEnabled = false
     }
 
@@ -77,16 +95,17 @@ final class LivePreviewViewController: NSViewController {
         case .idle:
             statusLabel.stringValue = "Last result"
             spinner.stopAnimation(nil)
-            stopButton.alphaValue = 0.0
+            stopButton.isHidden = true
             stopButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            copyButton.isEnabled = !copyButton.isHidden
             stopIndicator()
             refreshEditor()
         case .recording:
             statusLabel.stringValue = "Recording…"
             spinner.startAnimation(nil)
-            stopButton.alphaValue = 1.0
+            stopButton.isHidden = false
             stopButton.isEnabled = true
             copyButton.isHidden = true
             detailsButton.isHidden = true
@@ -97,7 +116,7 @@ final class LivePreviewViewController: NSViewController {
         case .transcribing:
             statusLabel.stringValue = "Transcribing…"
             spinner.startAnimation(nil)
-            stopButton.alphaValue = 0.0
+            stopButton.isHidden = true
             stopButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = true
@@ -106,7 +125,7 @@ final class LivePreviewViewController: NSViewController {
         case .cleaning:
             statusLabel.stringValue = "Cleaning up…"
             spinner.startAnimation(nil)
-            stopButton.alphaValue = 0.0
+            stopButton.isHidden = true
             stopButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = true
@@ -115,10 +134,11 @@ final class LivePreviewViewController: NSViewController {
         case .error(let msg):
             statusLabel.stringValue = "Error: \(msg)"
             spinner.stopAnimation(nil)
-            stopButton.alphaValue = 0.0
+            stopButton.isHidden = true
             stopButton.isEnabled = false
             detailsButton.isHidden = (lastErrorDetails == nil)
             copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            copyButton.isEnabled = !copyButton.isHidden
             stopIndicator()
             refreshEditor()
         }
@@ -167,9 +187,10 @@ final class LivePreviewViewController: NSViewController {
     private func startIndicator() {
         stopIndicator()
         indicatorStep = 0
-        recordingIndicatorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        let framesCount = 8
+        recordingIndicatorTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
             guard let self = self, self.state == .recording else { return }
-            self.indicatorStep = (self.indicatorStep + 1) % 3
+            self.indicatorStep = (self.indicatorStep + 1) % framesCount
             self.refreshEditor()
         }
         RunLoop.main.add(recordingIndicatorTimer!, forMode: .common)
