@@ -9,7 +9,7 @@ final class LivePreviewViewController: NSViewController {
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
     private let detailsButton = NSButton(title: "Details…", target: nil, action: nil)
     private var recordingIndicatorTimer: Timer?
-    private var indicatorStep = 0
+    private var indicatorStep = 0 // 0..2 cycling
     private var lastErrorDetails: String?
 
     private(set) var currentText: String = ""
@@ -137,21 +137,13 @@ final class LivePreviewViewController: NSViewController {
                 .font: editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
             ]
             let attr = NSMutableAttributedString(string: baseText, attributes: baseAttrs)
-            let dots = indicatorString()
-            let dotsAttrs: [NSAttributedString.Key: Any] = [
-                .foregroundColor: NSColor.controlAccentColor,
-                .font: editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-            ]
-            attr.append(NSAttributedString(string: dots, attributes: dotsAttrs))
+            let dots = indicatorAttributed(font: (baseAttrs[.font] as? NSFont) ?? NSFont.systemFont(ofSize: 13))
+            attr.append(dots)
             editor.setAttributed(attr)
         } else if state == .recording && currentText.isEmpty {
-            // Only show animated dots in accent color during recording when no text yet
-            let dots = indicatorString()
-            let dotsAttrs: [NSAttributedString.Key: Any] = [
-                .foregroundColor: NSColor.controlAccentColor,
-                .font: editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-            ]
-            editor.setAttributed(NSAttributedString(string: dots, attributes: dotsAttrs))
+            // Only show animated dots (fixed width) during recording when no text yet
+            let font = editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            editor.setAttributed(indicatorAttributed(font: font))
         } else {
             editor.string = baseText
         }
@@ -163,7 +155,7 @@ final class LivePreviewViewController: NSViewController {
         indicatorStep = 0
         recordingIndicatorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self, self.state == .recording else { return }
-            self.indicatorStep = (self.indicatorStep + 1) % 4
+            self.indicatorStep = (self.indicatorStep + 1) % 3
             self.refreshEditor()
         }
         RunLoop.main.add(recordingIndicatorTimer!, forMode: .common)
@@ -174,9 +166,20 @@ final class LivePreviewViewController: NSViewController {
         recordingIndicatorTimer = nil
     }
 
-    private func indicatorString() -> String {
-        let dots = ["", ".", "..", "..."]
-        return dots[indicatorStep]
+    private func indicatorAttributed(font: NSFont) -> NSAttributedString {
+        // Fixed-width three-dot indicator: color cycles across three positions
+        let dots = "···" // middle dots, constant length
+        let baseColor = NSColor.tertiaryLabelColor
+        let accent = NSColor.controlAccentColor
+        let attr = NSMutableAttributedString(string: dots, attributes: [
+            .foregroundColor: baseColor,
+            .font: font
+        ])
+        // Color the active dot
+        if indicatorStep >= 0 && indicatorStep < 3 {
+            attr.addAttribute(.foregroundColor, value: accent, range: NSRange(location: indicatorStep, length: 1))
+        }
+        return attr
     }
 
     @objc private func showErrorDetails() {

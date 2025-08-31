@@ -141,10 +141,12 @@ final class MenuBarController: NSObject {
             // Stage 1: Transcribe
             let rawResult: Result<String, Error>
             do {
-                NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel)")
+                let fileSize = (try? FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? NSNumber)?.intValue ?? -1
+                NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel), file=\(audioURL.lastPathComponent), size=\(fileSize) bytes")
                 let raw = try client.transcribe(apiKey: key, audioFileURL: audioURL, model: settings.transcriptionModel)
                 rawResult = .success(raw)
             } catch {
+                NSLog("Pipeline: Transcribe error: \(error.localizedDescription)")
                 rawResult = .failure(error)
             }
 
@@ -155,11 +157,21 @@ final class MenuBarController: NSObject {
                     let msg = "Transcription failed. Copied live preview."
                     self.previewVC.setErrorDetails(details)
                     self.previewVC.setState(.error(msg))
-                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error")
+                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error", resetUI: false)
+                    let alert = NSAlert()
+                    alert.messageText = "Transcription Failed"
+                    alert.informativeText = details
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                    self.previewVC.reset()
+                    self.previewVC.setState(.idle)
+                    self.setRecordingIcon(false)
                     if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
                 }
                 return
             case .success(let raw):
+                NSLog("Pipeline: Raw length=\(raw.count) chars")
                 DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
                 // Stage 2: Cleanup
                 let cleanResult: Result<String, Error>
@@ -168,10 +180,12 @@ final class MenuBarController: NSObject {
                     let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
                     cleanResult = .success(cleaned)
                 } catch {
+                    NSLog("Pipeline: Cleanup error: \(error.localizedDescription)")
                     cleanResult = .failure(error)
                 }
                 switch cleanResult {
                 case .success(let cleaned):
+                    NSLog("Pipeline: Cleaned length=\(cleaned.count) chars")
                     DispatchQueue.main.async {
                         self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "openai")
                         if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
@@ -182,7 +196,16 @@ final class MenuBarController: NSObject {
                         let msg = "Cleanup failed. Copied transcribed text."
                         self.previewVC.setErrorDetails(details)
                         self.previewVC.setState(.error(msg))
-                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error")
+                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error", resetUI: false)
+                        let alert = NSAlert()
+                        alert.messageText = "Cleanup Failed"
+                        alert.informativeText = details
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                        self.previewVC.reset()
+                        self.previewVC.setState(.idle)
+                        self.setRecordingIcon(false)
                         if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
                     }
                 }
@@ -190,7 +213,7 @@ final class MenuBarController: NSObject {
         }
     }
 
-    private func finalizeRecord(raw: String, cleaned: String, audioURL: URL?, source: String) {
+    private func finalizeRecord(raw: String, cleaned: String, audioURL: URL?, source: String, resetUI: Bool = true) {
         let trimmedRaw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedClean = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedRaw.isEmpty || !trimmedClean.isEmpty {
@@ -199,14 +222,17 @@ final class MenuBarController: NSObject {
             // Copy cleaned (or raw) text to clipboard after processing
             let textToCopy = trimmedClean.isEmpty ? trimmedRaw : trimmedClean
             if !textToCopy.isEmpty {
+                NSLog("Pipeline: Copying \(textToCopy.count) chars to clipboard (source=\(source))")
                 let pb = NSPasteboard.general
                 pb.clearContents()
                 pb.setString(textToCopy, forType: .string)
             }
         }
-        previewVC.reset()
-        previewVC.setState(.idle)
-        setRecordingIcon(false)
+        if resetUI {
+            previewVC.reset()
+            previewVC.setState(.idle)
+            setRecordingIcon(false)
+        }
     }
 
     @objc private func openSettings() { presentSettings(force: false) }
