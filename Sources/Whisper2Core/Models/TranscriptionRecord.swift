@@ -6,13 +6,17 @@ public struct TranscriptionRecord: Codable, Equatable, Identifiable {
     public var rawText: String
     public var cleanedText: String
     public var audioFilePath: String?
+    public var previewText: String?
+    public var source: String? // "openai" | "preview" | "error"
 
-    public init(id: UUID = UUID(), createdAt: Date = Date(), rawText: String, cleanedText: String, audioFilePath: String? = nil) {
+    public init(id: UUID = UUID(), createdAt: Date = Date(), rawText: String, cleanedText: String, audioFilePath: String? = nil, previewText: String? = nil, source: String? = nil) {
         self.id = id
         self.createdAt = createdAt
         self.rawText = rawText
         self.cleanedText = cleanedText
         self.audioFilePath = audioFilePath
+        self.previewText = previewText
+        self.source = source
     }
 }
 

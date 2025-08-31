@@ -88,6 +88,7 @@ final class MultilineTextEditor: NSView {
 
     @objc private func textDidChange(_ note: Notification) {
         onChange?(textView.string)
+        updateContentLayout()
     }
 
     override var acceptsFirstResponder: Bool { isEditableMode }
@@ -108,7 +109,7 @@ final class MultilineTextEditor: NSView {
 
     var string: String {
         get { textView.string }
-        set { textView.string = newValue }
+        set { textView.string = newValue; updateContentLayout() }
     }
 
     func setAttributed(_ attributed: NSAttributedString) {
@@ -118,6 +119,7 @@ final class MultilineTextEditor: NSView {
         } else {
             textView.textStorage?.setAttributedString(attributed)
         }
+        updateContentLayout()
     }
 
     func scrollToEnd() {
@@ -128,8 +130,8 @@ final class MultilineTextEditor: NSView {
         textView.scrollToEndOfDocument(nil)
     }
 
-    override func layout() {
-        super.layout()
+    private func updateContentLayout() {
+        // Keep the text view width in sync with the scroll content width
         // Keep the text view width in sync with the scroll content width
         let viewport = scroll.contentSize
         if textView.frame.size.width != viewport.width {
@@ -152,5 +154,10 @@ final class MultilineTextEditor: NSView {
             }
         }
         if autoScrollToEnd { scrollToEnd() }
+    }
+
+    override func layout() {
+        super.layout()
+        updateContentLayout()
     }
 }

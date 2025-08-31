@@ -112,10 +112,17 @@ final class LivePreviewViewController: NSViewController {
     private func refreshEditor() {
         let baseText = currentText.isEmpty ? "Speak to see live preview…" : currentText
         if state == .recording && !currentText.isEmpty {
-            let attr = NSMutableAttributedString(string: baseText)
+            let baseAttrs: [NSAttributedString.Key: Any] = [
+                .foregroundColor: NSColor.labelColor,
+                .font: editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            ]
+            let attr = NSMutableAttributedString(string: baseText, attributes: baseAttrs)
             let dots = indicatorString()
-            let dotsAttr = [NSAttributedString.Key.foregroundColor: NSColor.controlAccentColor]
-            attr.append(NSAttributedString(string: dots, attributes: dotsAttr))
+            let dotsAttrs: [NSAttributedString.Key: Any] = [
+                .foregroundColor: NSColor.controlAccentColor,
+                .font: editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            ]
+            attr.append(NSAttributedString(string: dots, attributes: dotsAttrs))
             editor.setAttributed(attr)
         } else {
             editor.string = baseText

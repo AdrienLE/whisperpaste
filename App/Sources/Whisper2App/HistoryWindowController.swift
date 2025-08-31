@@ -36,14 +36,18 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let dateCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("date"))
         dateCol.title = "Date"
         dateCol.width = 160
+        let previewCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("preview"))
+        previewCol.title = "Preview"
+        previewCol.width = 200
         let rawCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("raw"))
-        rawCol.title = "Raw"
-        rawCol.width = 200
+        rawCol.title = "Transcribed"
+        rawCol.width = 220
         let cleanCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clean"))
         cleanCol.title = "Cleaned"
-        cleanCol.width = 200
+        cleanCol.width = 220
 
         table.addTableColumn(dateCol)
+        table.addTableColumn(previewCol)
         table.addTableColumn(rawCol)
         table.addTableColumn(cleanCol)
         table.usesAlternatingRowBackgroundColors = true
@@ -94,6 +98,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             fmt.dateStyle = .short
             fmt.timeStyle = .short
             text = fmt.string(from: item.createdAt)
+        case "preview": text = item.previewText ?? ""
         case "raw": text = item.rawText
         case "clean": text = item.cleanedText
         default: text = ""

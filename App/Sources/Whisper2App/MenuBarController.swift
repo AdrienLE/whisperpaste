@@ -123,12 +123,14 @@ final class MenuBarController: NSObject {
         let settings = settingsStore.load()
         guard let audioURL = recorder?.recordedFileURL else {
             // Fallback: no audio captured, use preview text
-            finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: nil)
+            NSLog("Pipeline: No audio captured; using live preview text")
+            finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: nil, source: "preview")
             return
         }
         guard let key = settings.openAIKey, !key.isEmpty else {
             // No API key, use preview text
-            finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil)
+            NSLog("Pipeline: Missing API key; using live preview text")
+            finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "preview")
             if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
             return
         }
@@ -137,29 +139,31 @@ final class MenuBarController: NSObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
+                NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel)")
                 let raw = try client.transcribe(apiKey: key, audioFileURL: audioURL, model: settings.transcriptionModel)
                 DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
+                NSLog("Pipeline: Cleaning with model=\(settings.cleanupModel)")
                 let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
                 DispatchQueue.main.async {
-                    self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil)
+                    self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "openai")
                     if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
                 }
             } catch {
                 DispatchQueue.main.async {
                     NSLog("OpenAI pipeline error: \(error)")
                     self.previewVC.setState(.error("Transcription failed"))
-                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil)
+                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error")
                     if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
                 }
             }
         }
     }
 
-    private func finalizeRecord(raw: String, cleaned: String, audioURL: URL?) {
+    private func finalizeRecord(raw: String, cleaned: String, audioURL: URL?, source: String) {
         let trimmedRaw = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedClean = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedRaw.isEmpty || !trimmedClean.isEmpty {
-            let record = TranscriptionRecord(rawText: trimmedRaw, cleanedText: trimmedClean, audioFilePath: audioURL?.path)
+            let record = TranscriptionRecord(rawText: trimmedRaw, cleanedText: trimmedClean, audioFilePath: audioURL?.path, previewText: previewVC.currentText, source: source)
             try? historyStore.append(record)
             // Copy cleaned (or raw) text to clipboard after processing
             let textToCopy = trimmedClean.isEmpty ? trimmedRaw : trimmedClean
