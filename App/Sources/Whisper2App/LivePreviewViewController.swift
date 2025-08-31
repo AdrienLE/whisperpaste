@@ -7,8 +7,10 @@ final class LivePreviewViewController: NSViewController {
     private let spinner = NSProgressIndicator()
     private let editor = MultilineTextEditor(editable: false)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
+    private let detailsButton = NSButton(title: "Details…", target: nil, action: nil)
     private var recordingIndicatorTimer: Timer?
     private var indicatorStep = 0
+    private var lastErrorDetails: String?
 
     private(set) var currentText: String = ""
     private(set) var state: State = .idle
@@ -26,7 +28,12 @@ final class LivePreviewViewController: NSViewController {
         stopButton.target = self
         stopButton.action = #selector(didTapStop)
 
-        let topRow = NSStackView(views: [statusLabel, spinner, NSView(), stopButton])
+        detailsButton.target = self
+        detailsButton.action = #selector(showErrorDetails)
+        detailsButton.isHidden = true
+        detailsButton.bezelStyle = .inline
+
+        let topRow = NSStackView(views: [statusLabel, spinner, detailsButton, NSView(), stopButton])
         topRow.orientation = .horizontal
         topRow.alignment = .centerY
         topRow.spacing = 8
@@ -66,6 +73,7 @@ final class LivePreviewViewController: NSViewController {
             spinner.stopAnimation(nil)
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
+            detailsButton.isHidden = true
             stopIndicator()
             refreshEditor()
         case .recording:
@@ -73,6 +81,7 @@ final class LivePreviewViewController: NSViewController {
             spinner.startAnimation(nil)
             stopButton.alphaValue = 1.0
             stopButton.isEnabled = true
+            detailsButton.isHidden = true
             startIndicator()
             refreshEditor()
         case .transcribing:
@@ -80,6 +89,7 @@ final class LivePreviewViewController: NSViewController {
             spinner.startAnimation(nil)
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
+            detailsButton.isHidden = true
             stopIndicator()
             refreshEditor()
         case .cleaning:
@@ -87,6 +97,7 @@ final class LivePreviewViewController: NSViewController {
             spinner.startAnimation(nil)
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
+            detailsButton.isHidden = true
             stopIndicator()
             refreshEditor()
         case .error(let msg):
@@ -94,6 +105,7 @@ final class LivePreviewViewController: NSViewController {
             spinner.stopAnimation(nil)
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
+            detailsButton.isHidden = (lastErrorDetails == nil)
             stopIndicator()
             refreshEditor()
         }
@@ -110,7 +122,15 @@ final class LivePreviewViewController: NSViewController {
     }
 
     private func refreshEditor() {
-        let baseText = currentText.isEmpty ? "Speak to see live preview…" : currentText
+        let baseText: String = {
+            switch state {
+            case .recording:
+                // No placeholder during recording; show only text + indicator
+                return currentText
+            default:
+                return currentText.isEmpty ? "Speak to see live preview…" : currentText
+            }
+        }()
         if state == .recording && !currentText.isEmpty {
             let baseAttrs: [NSAttributedString.Key: Any] = [
                 .foregroundColor: NSColor.labelColor,
@@ -124,6 +144,14 @@ final class LivePreviewViewController: NSViewController {
             ]
             attr.append(NSAttributedString(string: dots, attributes: dotsAttrs))
             editor.setAttributed(attr)
+        } else if state == .recording && currentText.isEmpty {
+            // Only show animated dots in accent color during recording when no text yet
+            let dots = indicatorString()
+            let dotsAttrs: [NSAttributedString.Key: Any] = [
+                .foregroundColor: NSColor.controlAccentColor,
+                .font: editor.textView.font ?? NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+            ]
+            editor.setAttributed(NSAttributedString(string: dots, attributes: dotsAttrs))
         } else {
             editor.string = baseText
         }
@@ -149,5 +177,21 @@ final class LivePreviewViewController: NSViewController {
     private func indicatorString() -> String {
         let dots = ["", ".", "..", "..."]
         return dots[indicatorStep]
+    }
+
+    @objc private func showErrorDetails() {
+        guard let details = lastErrorDetails, !details.isEmpty else { return }
+        let alert = NSAlert()
+        alert.messageText = "Transcription Pipeline Error"
+        alert.informativeText = details
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    func setErrorDetails(_ details: String?) {
+        lastErrorDetails = details
+        statusLabel.toolTip = details
+        if case .error = state { detailsButton.isHidden = (details == nil) }
     }
 }

@@ -138,22 +138,53 @@ final class MenuBarController: NSObject {
         let client = OpenAIClient()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+            // Stage 1: Transcribe
+            let rawResult: Result<String, Error>
             do {
                 NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel)")
                 let raw = try client.transcribe(apiKey: key, audioFileURL: audioURL, model: settings.transcriptionModel)
-                DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
-                NSLog("Pipeline: Cleaning with model=\(settings.cleanupModel)")
-                let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
-                DispatchQueue.main.async {
-                    self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "openai")
-                    if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
-                }
+                rawResult = .success(raw)
             } catch {
+                rawResult = .failure(error)
+            }
+
+            switch rawResult {
+            case .failure(let error):
+                let details = (error as NSError).localizedDescription
                 DispatchQueue.main.async {
-                    NSLog("OpenAI pipeline error: \(error)")
-                    self.previewVC.setState(.error("Transcription failed"))
+                    let msg = "Transcription failed. Copied live preview."
+                    self.previewVC.setErrorDetails(details)
+                    self.previewVC.setState(.error(msg))
                     self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error")
                     if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                }
+                return
+            case .success(let raw):
+                DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
+                // Stage 2: Cleanup
+                let cleanResult: Result<String, Error>
+                do {
+                    NSLog("Pipeline: Cleaning with model=\(settings.cleanupModel)")
+                    let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
+                    cleanResult = .success(cleaned)
+                } catch {
+                    cleanResult = .failure(error)
+                }
+                switch cleanResult {
+                case .success(let cleaned):
+                    DispatchQueue.main.async {
+                        self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "openai")
+                        if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                    }
+                case .failure(let error):
+                    let details = (error as NSError).localizedDescription
+                    DispatchQueue.main.async {
+                        let msg = "Cleanup failed. Copied transcribed text."
+                        self.previewVC.setErrorDetails(details)
+                        self.previewVC.setState(.error(msg))
+                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error")
+                        if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                    }
                 }
             }
         }

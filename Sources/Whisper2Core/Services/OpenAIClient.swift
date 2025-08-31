@@ -20,7 +20,21 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         self.session = session
     }
 
-    public enum ClientError: Error { case invalidResponse, http(Int), noData }
+    public enum ClientError: Error, LocalizedError {
+        case invalidResponse
+        case http(Int, String?)
+        case noData
+
+        public var errorDescription: String? {
+            switch self {
+            case .invalidResponse: return "Invalid HTTP response"
+            case .noData: return "No response data"
+            case .http(let code, let message):
+                if let m = message, !m.isEmpty { return "HTTP \(code): \(m)" }
+                return "HTTP \(code)"
+            }
+        }
+    }
 
     public func transcribe(apiKey: String, audioFileURL: URL, model: String) throws -> String {
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -31,7 +45,10 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         req.httpBody = try Self.multipartBody(boundary: boundary, params: ["model": model], fileURL: audioFileURL, fileParam: "file", filename: audioFileURL.lastPathComponent, mime: "audio/x-caf")
         let (data, resp) = try syncRequest(req)
         guard let http = resp as? HTTPURLResponse else { throw ClientError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ClientError.http(http.statusCode) }
+        if !(200..<300).contains(http.statusCode) {
+            let msg = Self.extractAPIErrorMessage(from: data)
+            throw ClientError.http(http.statusCode, msg)
+        }
         guard let data = data else { throw ClientError.noData }
         // Response: { text: "..." } for whisper endpoint
         let obj = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
@@ -55,7 +72,10 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         let (data, resp) = try syncRequest(req)
         guard let http = resp as? HTTPURLResponse else { throw ClientError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ClientError.http(http.statusCode) }
+        if !(200..<300).contains(http.statusCode) {
+            let msg = Self.extractAPIErrorMessage(from: data)
+            throw ClientError.http(http.statusCode, msg)
+        }
         guard let data = data else { throw ClientError.noData }
         let obj = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
         if let choices = obj?["choices"] as? [[String: Any]],
@@ -72,7 +92,10 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         let (data, resp) = try syncRequest(req)
         guard let http = resp as? HTTPURLResponse else { throw ClientError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else { throw ClientError.http(http.statusCode) }
+        if !(200..<300).contains(http.statusCode) {
+            let msg = Self.extractAPIErrorMessage(from: data)
+            throw ClientError.http(http.statusCode, msg)
+        }
         guard let data = data else { throw ClientError.noData }
         let obj = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
         let arr = (obj?["data"] as? [[String: Any]] ?? [])
@@ -112,5 +135,16 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         append("\r\n")
         append("--\(boundary)--\r\n")
         return body
+    }
+
+    private static func extractAPIErrorMessage(from data: Data?) -> String? {
+        guard let data = data, !data.isEmpty else { return nil }
+        // Try JSON { error: { message: "..." } }
+        if let obj = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+            if let err = obj["error"] as? [String: Any], let message = err["message"] as? String { return message }
+            if let message = obj["message"] as? String { return message }
+        }
+        // Fallback to UTF-8 string
+        return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

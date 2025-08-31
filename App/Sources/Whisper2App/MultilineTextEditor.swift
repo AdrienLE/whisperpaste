@@ -8,6 +8,7 @@ final class MultilineTextEditor: NSView {
     private let isEditableMode: Bool
     var onChange: ((String) -> Void)?
     var autoScrollToEnd: Bool = false
+    private var lastContentHeight: CGFloat = 0
 
     init(editable: Bool) {
         self.isEditableMode = editable
@@ -123,11 +124,16 @@ final class MultilineTextEditor: NSView {
     }
 
     func scrollToEnd() {
-        guard !textView.string.isEmpty else { return }
-        if let lm = textView.layoutManager, let tc = textView.textContainer {
-            lm.ensureLayout(for: tc)
+        let tv = textView
+        // Defer to next run loop so layout completes before scrolling
+        DispatchQueue.main.async {
+            if let lm = tv.layoutManager, let tc = tv.textContainer {
+                lm.ensureLayout(for: tc)
+            }
+            tv.scrollToEndOfDocument(nil)
+            let len = (tv.string as NSString).length
+            tv.scrollRangeToVisible(NSRange(location: len, length: 0))
         }
-        textView.scrollToEndOfDocument(nil)
     }
 
     private func updateContentLayout() {
@@ -152,6 +158,10 @@ final class MultilineTextEditor: NSView {
             if abs(textView.frame.size.height - newHeight) > 0.5 {
                 textView.setFrameSize(NSSize(width: viewport.width, height: newHeight))
             }
+            if newHeight > viewport.height && newHeight > lastContentHeight + 2 {
+                scroll.flashScrollers()
+            }
+            lastContentHeight = newHeight
         }
         if autoScrollToEnd { scrollToEnd() }
     }

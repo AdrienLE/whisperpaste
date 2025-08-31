@@ -72,7 +72,6 @@ final class SpeechRecorder {
 
         // Recognition task
         if let recognizer = recognizer, recognizer.isAvailable, let request = request {
-            onPreview?("Listening…")
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 guard let self = self else { return }
                 if let r = result {
