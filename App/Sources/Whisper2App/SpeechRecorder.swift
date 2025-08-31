@@ -54,7 +54,8 @@ final class SpeechRecorder {
         // Prepare audio file path
         do {
             let audioDir = try AppSupportPaths.audioDirectory()
-            let name = "rec-" + ISO8601DateFormatter().string(from: Date()) + ".caf"
+            // Write uncompressed WAV during recording for reliability; compress to m4a post-stop.
+            let name = "rec-" + ISO8601DateFormatter().string(from: Date()) + ".wav"
             let url = audioDir.appendingPathComponent(name)
             audioURL = url
         } catch {

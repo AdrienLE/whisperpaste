@@ -42,7 +42,8 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try Self.multipartBody(boundary: boundary, params: ["model": model], fileURL: audioFileURL, fileParam: "file", filename: audioFileURL.lastPathComponent, mime: "audio/x-caf")
+        let mime = Self.mimeType(for: audioFileURL)
+        req.httpBody = try Self.multipartBody(boundary: boundary, params: ["model": model], fileURL: audioFileURL, fileParam: "file", filename: audioFileURL.lastPathComponent, mime: mime)
         let (data, resp) = try syncRequest(req)
         guard let http = resp as? HTTPURLResponse else { throw ClientError.invalidResponse }
         if !(200..<300).contains(http.statusCode) {
@@ -146,5 +147,18 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         }
         // Fallback to UTF-8 string
         return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func mimeType(for url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "m4a": return "audio/mp4"
+        case "mp3": return "audio/mpeg"
+        case "wav": return "audio/wav"
+        case "webm": return "audio/webm"
+        case "mp4": return "audio/mp4"
+        case "aac": return "audio/aac"
+        case "caf": return "audio/x-caf"
+        default: return "application/octet-stream"
+        }
     }
 }

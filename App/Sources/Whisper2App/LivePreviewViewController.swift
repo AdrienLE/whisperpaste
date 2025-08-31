@@ -138,6 +138,7 @@ final class LivePreviewViewController: NSViewController {
             ]
             let attr = NSMutableAttributedString(string: baseText, attributes: baseAttrs)
             let dots = indicatorAttributed(font: (baseAttrs[.font] as? NSFont) ?? NSFont.systemFont(ofSize: 13))
+            attr.append(NSAttributedString(string: " "))
             attr.append(dots)
             editor.setAttributed(attr)
         } else if state == .recording && currentText.isEmpty {

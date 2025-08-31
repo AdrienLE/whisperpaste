@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import AVFoundation
 import Whisper2Core
 
 final class MenuBarController: NSObject {
@@ -138,12 +139,15 @@ final class MenuBarController: NSObject {
         let client = OpenAIClient()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+            // Prepare audio: convert to m4a (AAC) for API compatibility/size
+            let preparedURL = self.prepareAudioForUpload(originalURL: audioURL)
+            let uploadURL = preparedURL ?? audioURL
             // Stage 1: Transcribe
             let rawResult: Result<String, Error>
             do {
-                let fileSize = (try? FileManager.default.attributesOfItem(atPath: audioURL.path)[.size] as? NSNumber)?.intValue ?? -1
-                NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel), file=\(audioURL.lastPathComponent), size=\(fileSize) bytes")
-                let raw = try client.transcribe(apiKey: key, audioFileURL: audioURL, model: settings.transcriptionModel)
+                let fileSize = (try? FileManager.default.attributesOfItem(atPath: uploadURL.path)[.size] as? NSNumber)?.intValue ?? -1
+                NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel), file=\(uploadURL.lastPathComponent), size=\(fileSize) bytes")
+                let raw = try client.transcribe(apiKey: key, audioFileURL: uploadURL, model: settings.transcriptionModel)
                 rawResult = .success(raw)
             } catch {
                 NSLog("Pipeline: Transcribe error: \(error.localizedDescription)")
@@ -157,7 +161,7 @@ final class MenuBarController: NSObject {
                     let msg = "Transcription failed. Copied live preview."
                     self.previewVC.setErrorDetails(details)
                     self.previewVC.setState(.error(msg))
-                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error", resetUI: false)
+                    self.finalizeRecord(raw: self.previewVC.currentText, cleaned: self.previewVC.currentText, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "error", resetUI: false)
                     let alert = NSAlert()
                     alert.messageText = "Transcription Failed"
                     alert.informativeText = details
@@ -167,7 +171,13 @@ final class MenuBarController: NSObject {
                     self.previewVC.reset()
                     self.previewVC.setState(.idle)
                     self.setRecordingIcon(false)
-                    if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                    if !settings.keepAudioFiles {
+                        try? FileManager.default.removeItem(at: audioURL)
+                        if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
+                    } else if uploadURL != audioURL {
+                        // Prefer keeping the compressed file; remove raw to save space
+                        try? FileManager.default.removeItem(at: audioURL)
+                    }
                 }
                 return
             case .success(let raw):
@@ -187,8 +197,14 @@ final class MenuBarController: NSObject {
                 case .success(let cleaned):
                     NSLog("Pipeline: Cleaned length=\(cleaned.count) chars")
                     DispatchQueue.main.async {
-                        self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "openai")
-                        if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                        self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "openai")
+                        if !settings.keepAudioFiles {
+                            try? FileManager.default.removeItem(at: audioURL)
+                            if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
+                        } else if uploadURL != audioURL {
+                            // Prefer keeping the compressed file; remove raw to save space
+                            try? FileManager.default.removeItem(at: audioURL)
+                        }
                     }
                 case .failure(let error):
                     let details = (error as NSError).localizedDescription
@@ -196,7 +212,7 @@ final class MenuBarController: NSObject {
                         let msg = "Cleanup failed. Copied transcribed text."
                         self.previewVC.setErrorDetails(details)
                         self.previewVC.setState(.error(msg))
-                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "error", resetUI: false)
+                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "error", resetUI: false)
                         let alert = NSAlert()
                         alert.messageText = "Cleanup Failed"
                         alert.informativeText = details
@@ -206,10 +222,45 @@ final class MenuBarController: NSObject {
                         self.previewVC.reset()
                         self.previewVC.setState(.idle)
                         self.setRecordingIcon(false)
-                        if !settings.keepAudioFiles { try? FileManager.default.removeItem(at: audioURL) }
+                        if !settings.keepAudioFiles {
+                            try? FileManager.default.removeItem(at: audioURL)
+                            if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
+                        } else if uploadURL != audioURL {
+                            try? FileManager.default.removeItem(at: audioURL)
+                        }
                     }
                 }
             }
+        }
+    }
+
+    // Convert recorded audio to m4a (AAC) for OpenAI API compatibility/size.
+    private func prepareAudioForUpload(originalURL: URL) -> URL? {
+        let ext = originalURL.pathExtension.lowercased()
+        if ext == "m4a" { return originalURL }
+        let outURL = originalURL.deletingPathExtension().appendingPathExtension("m4a")
+        try? FileManager.default.removeItem(at: outURL)
+        let asset = AVURLAsset(url: originalURL)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+            NSLog("Pipeline: AVAssetExportSession not available for \(originalURL.lastPathComponent)")
+            return nil
+        }
+        export.outputURL = outURL
+        export.outputFileType = .m4a
+        let sem = DispatchSemaphore(value: 1)
+        export.exportAsynchronously {
+            sem.signal()
+        }
+        sem.wait()
+        switch export.status {
+        case .completed:
+            NSLog("Pipeline: Exported m4a -> \(outURL.lastPathComponent)")
+            return outURL
+        case .failed, .cancelled:
+            NSLog("Pipeline: m4a export failed: \(export.error?.localizedDescription ?? "unknown error")")
+            return nil
+        default:
+            return nil
         }
     }
 
