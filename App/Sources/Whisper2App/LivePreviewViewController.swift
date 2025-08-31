@@ -49,6 +49,11 @@ final class LivePreviewViewController: NSViewController {
         // Initialize visuals without overriding externally-set state
         statusLabel.stringValue = (state == .idle) ? "Idle" : statusLabel.stringValue
         if currentText.isEmpty { editor.string = "Speak to see live preview…" } else { editor.string = currentText }
+        editor.autoScrollToEnd = true
+        // Keep Stop button space reserved to avoid layout jumps
+        stopButton.isBordered = true
+        stopButton.alphaValue = 0.0
+        stopButton.isEnabled = false
     }
 
     @objc private func didTapStop() { onStop?() }
@@ -59,31 +64,36 @@ final class LivePreviewViewController: NSViewController {
         case .idle:
             statusLabel.stringValue = "Idle"
             spinner.stopAnimation(nil)
-            stopButton.isHidden = true
+            stopButton.alphaValue = 0.0
+            stopButton.isEnabled = false
             stopIndicator()
             refreshEditor()
         case .recording:
             statusLabel.stringValue = "Recording…"
             spinner.startAnimation(nil)
-            stopButton.isHidden = false
+            stopButton.alphaValue = 1.0
+            stopButton.isEnabled = true
             startIndicator()
             refreshEditor()
         case .transcribing:
             statusLabel.stringValue = "Transcribing…"
             spinner.startAnimation(nil)
-            stopButton.isHidden = true
+            stopButton.alphaValue = 0.0
+            stopButton.isEnabled = false
             stopIndicator()
             refreshEditor()
         case .cleaning:
             statusLabel.stringValue = "Cleaning up…"
             spinner.startAnimation(nil)
-            stopButton.isHidden = true
+            stopButton.alphaValue = 0.0
+            stopButton.isEnabled = false
             stopIndicator()
             refreshEditor()
         case .error(let msg):
             statusLabel.stringValue = "Error: \(msg)"
             spinner.stopAnimation(nil)
-            stopButton.isHidden = true
+            stopButton.alphaValue = 0.0
+            stopButton.isEnabled = false
             stopIndicator()
             refreshEditor()
         }
@@ -100,11 +110,15 @@ final class LivePreviewViewController: NSViewController {
     }
 
     private func refreshEditor() {
-        let base = currentText.isEmpty ? "Speak to see live preview…" : currentText
+        let baseText = currentText.isEmpty ? "Speak to see live preview…" : currentText
         if state == .recording && !currentText.isEmpty {
-            editor.string = base + indicatorString()
+            let attr = NSMutableAttributedString(string: baseText)
+            let dots = indicatorString()
+            let dotsAttr = [NSAttributedString.Key.foregroundColor: NSColor.controlAccentColor]
+            attr.append(NSAttributedString(string: dots, attributes: dotsAttr))
+            editor.setAttributed(attr)
         } else {
-            editor.string = base
+            editor.string = baseText
         }
         editor.scrollToEnd()
     }
@@ -126,7 +140,7 @@ final class LivePreviewViewController: NSViewController {
     }
 
     private func indicatorString() -> String {
-        let dots = [" ∘", " ∘·", " ∘··", " ∘···"]
+        let dots = ["", ".", "..", "..."]
         return dots[indicatorStep]
     }
 }

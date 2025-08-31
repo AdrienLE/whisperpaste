@@ -7,6 +7,7 @@ final class MultilineTextEditor: NSView {
 
     private let isEditableMode: Bool
     var onChange: ((String) -> Void)?
+    var autoScrollToEnd: Bool = false
 
     init(editable: Bool) {
         self.isEditableMode = editable
@@ -110,6 +111,15 @@ final class MultilineTextEditor: NSView {
         set { textView.string = newValue }
     }
 
+    func setAttributed(_ attributed: NSAttributedString) {
+        if isEditableMode {
+            // For editable mode, stick to plain string to avoid rich-text editing
+            textView.string = attributed.string
+        } else {
+            textView.textStorage?.setAttributedString(attributed)
+        }
+    }
+
     func scrollToEnd() {
         guard !textView.string.isEmpty else { return }
         if let lm = textView.layoutManager, let tc = textView.textContainer {
@@ -141,5 +151,6 @@ final class MultilineTextEditor: NSView {
                 textView.setFrameSize(NSSize(width: viewport.width, height: newHeight))
             }
         }
+        if autoScrollToEnd { scrollToEnd() }
     }
 }
