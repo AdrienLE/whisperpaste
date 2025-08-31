@@ -137,17 +137,26 @@ final class MenuBarController: NSObject {
         }
 
         let client = OpenAIClient()
+        let pipelineStart = Date()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             // Prepare audio: convert to m4a (AAC) for API compatibility/size
+            let convertStart = Date()
             let preparedURL = self.prepareAudioForUpload(originalURL: audioURL)
+            let convertDuration = Date().timeIntervalSince(convertStart)
+            if preparedURL != nil {
+                NSLog("Pipeline: Conversion to m4a took %.2fs", convertDuration)
+            }
             let uploadURL = preparedURL ?? audioURL
             // Stage 1: Transcribe
             let rawResult: Result<String, Error>
             do {
                 let fileSize = (try? FileManager.default.attributesOfItem(atPath: uploadURL.path)[.size] as? NSNumber)?.intValue ?? -1
                 NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel), file=\(uploadURL.lastPathComponent), size=\(fileSize) bytes")
+                let t0 = Date()
                 let raw = try client.transcribe(apiKey: key, audioFileURL: uploadURL, model: settings.transcriptionModel)
+                let tDur = Date().timeIntervalSince(t0)
+                NSLog("Pipeline: Transcribe duration %.2fs", tDur)
                 rawResult = .success(raw)
             } catch {
                 NSLog("Pipeline: Transcribe error: \(error.localizedDescription)")
@@ -187,7 +196,10 @@ final class MenuBarController: NSObject {
                 let cleanResult: Result<String, Error>
                 do {
                     NSLog("Pipeline: Cleaning with model=\(settings.cleanupModel)")
+                    let c0 = Date()
                     let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
+                    let cDur = Date().timeIntervalSince(c0)
+                    NSLog("Pipeline: Cleanup duration %.2fs", cDur)
                     cleanResult = .success(cleaned)
                 } catch {
                     NSLog("Pipeline: Cleanup error: \(error.localizedDescription)")
@@ -205,6 +217,9 @@ final class MenuBarController: NSObject {
                             // Prefer keeping the compressed file; remove raw to save space
                             try? FileManager.default.removeItem(at: audioURL)
                         }
+                        let total = Date().timeIntervalSince(pipelineStart)
+                        NSLog("Pipeline: Total duration %.2fs", total)
+                        self.previewVC.showFinalText(cleaned)
                     }
                 case .failure(let error):
                     let details = (error as NSError).localizedDescription
@@ -219,7 +234,7 @@ final class MenuBarController: NSObject {
                         alert.alertStyle = .warning
                         alert.addButton(withTitle: "OK")
                         alert.runModal()
-                        self.previewVC.reset()
+                        self.previewVC.showFinalText(raw)
                         self.previewVC.setState(.idle)
                         self.setRecordingIcon(false)
                         if !settings.keepAudioFiles {
@@ -228,6 +243,8 @@ final class MenuBarController: NSObject {
                         } else if uploadURL != audioURL {
                             try? FileManager.default.removeItem(at: audioURL)
                         }
+                        let total = Date().timeIntervalSince(pipelineStart)
+                        NSLog("Pipeline: Total duration %.2fs", total)
                     }
                 }
             }

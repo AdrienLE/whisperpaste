@@ -7,6 +7,7 @@ final class LivePreviewViewController: NSViewController {
     private let spinner = NSProgressIndicator()
     private let editor = MultilineTextEditor(editable: false)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
+    private let copyButton = NSButton(title: "Copy", target: nil, action: nil)
     private let detailsButton = NSButton(title: "Details…", target: nil, action: nil)
     private var recordingIndicatorTimer: Timer?
     private var indicatorStep = 0 // 0..2 cycling
@@ -33,7 +34,12 @@ final class LivePreviewViewController: NSViewController {
         detailsButton.isHidden = true
         detailsButton.bezelStyle = .inline
 
-        let topRow = NSStackView(views: [statusLabel, spinner, detailsButton, NSView(), stopButton])
+        copyButton.target = self
+        copyButton.action = #selector(copyCurrentText)
+        copyButton.bezelStyle = .inline
+        copyButton.isHidden = true
+
+        let topRow = NSStackView(views: [statusLabel, spinner, detailsButton, NSView(), copyButton, stopButton])
         topRow.orientation = .horizontal
         topRow.alignment = .centerY
         topRow.spacing = 8
@@ -69,11 +75,12 @@ final class LivePreviewViewController: NSViewController {
         self.state = state
         switch state {
         case .idle:
-            statusLabel.stringValue = "Idle"
+            statusLabel.stringValue = "Last result"
             spinner.stopAnimation(nil)
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
             detailsButton.isHidden = true
+            copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             stopIndicator()
             refreshEditor()
         case .recording:
@@ -81,7 +88,10 @@ final class LivePreviewViewController: NSViewController {
             spinner.startAnimation(nil)
             stopButton.alphaValue = 1.0
             stopButton.isEnabled = true
+            copyButton.isHidden = true
             detailsButton.isHidden = true
+            // Clear previous text for a fresh session
+            currentText = ""
             startIndicator()
             refreshEditor()
         case .transcribing:
@@ -90,6 +100,7 @@ final class LivePreviewViewController: NSViewController {
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
             detailsButton.isHidden = true
+            copyButton.isHidden = true
             stopIndicator()
             refreshEditor()
         case .cleaning:
@@ -98,6 +109,7 @@ final class LivePreviewViewController: NSViewController {
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
             detailsButton.isHidden = true
+            copyButton.isHidden = true
             stopIndicator()
             refreshEditor()
         case .error(let msg):
@@ -106,6 +118,7 @@ final class LivePreviewViewController: NSViewController {
             stopButton.alphaValue = 0.0
             stopButton.isEnabled = false
             detailsButton.isHidden = (lastErrorDetails == nil)
+            copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             stopIndicator()
             refreshEditor()
         }
@@ -168,19 +181,14 @@ final class LivePreviewViewController: NSViewController {
     }
 
     private func indicatorAttributed(font: NSFont) -> NSAttributedString {
-        // Fixed-width three-dot indicator: color cycles across three positions
-        let dots = "···" // middle dots, constant length
-        let baseColor = NSColor.tertiaryLabelColor
-        let accent = NSColor.controlAccentColor
-        let attr = NSMutableAttributedString(string: dots, attributes: [
-            .foregroundColor: baseColor,
+        // Fixed-width braille spinner frames
+        let frames = ["⣷", "⣯", "⣟", "⡿", "⢿", "⣻", "⣽", "⣾"]
+        let idx = max(0, indicatorStep % frames.count)
+        let frame = frames[idx]
+        return NSAttributedString(string: frame, attributes: [
+            .foregroundColor: NSColor.controlAccentColor,
             .font: font
         ])
-        // Color the active dot
-        if indicatorStep >= 0 && indicatorStep < 3 {
-            attr.addAttribute(.foregroundColor, value: accent, range: NSRange(location: indicatorStep, length: 1))
-        }
-        return attr
     }
 
     @objc private func showErrorDetails() {
@@ -197,5 +205,19 @@ final class LivePreviewViewController: NSViewController {
         lastErrorDetails = details
         statusLabel.toolTip = details
         if case .error = state { detailsButton.isHidden = (details == nil) }
+    }
+
+    func showFinalText(_ text: String) {
+        currentText = text
+        copyButton.isHidden = currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        refreshEditor()
+    }
+
+    @objc private func copyCurrentText() {
+        let textToCopy = currentText
+        guard !textToCopy.isEmpty else { NSSound.beep(); return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(textToCopy, forType: .string)
     }
 }
