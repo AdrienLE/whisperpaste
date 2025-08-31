@@ -259,8 +259,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private static func partitionModels(models: [String]) -> ([String], [String]) {
-        let trans = models.filter { $0.localizedCaseInsensitiveContains("whisper") || $0.localizedCaseInsensitiveContains("transcribe") }
-        let clean = models.filter { $0.hasPrefix("gpt-") }
+        // Transcription: whisper or transcribe
+        let trans = models.filter { id in
+            id.localizedCaseInsensitiveContains("whisper") || id.localizedCaseInsensitiveContains("transcribe")
+        }
+        // Cleanup: chat-capable gpt-* models excluding audio-only or non-chat variants
+        let excluded = ["audio", "tts", "realtime", "embed", "transcribe", "whisper"]
+        let cleanAll = models.filter { $0.hasPrefix("gpt-") }
+        let clean = cleanAll.filter { id in !excluded.contains { id.localizedCaseInsensitiveContains($0) } }
         return (trans.isEmpty ? ["whisper-1", "gpt-4o-mini-transcribe"] : trans,
                 clean.isEmpty ? ["gpt-4o-mini", "gpt-4o"] : clean)
     }

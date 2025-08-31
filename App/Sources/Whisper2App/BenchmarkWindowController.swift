@@ -52,6 +52,10 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
         let modelCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("model")); modelCol.title = "Model"; modelCol.width = 280
         let timeCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("time")); timeCol.title = "Seconds"; timeCol.width = 100
         let errorCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("error")); errorCol.title = "Error"; errorCol.width = 300
+        // Enable sorting
+        stageCol.sortDescriptorPrototype = NSSortDescriptor(key: "stage", ascending: true)
+        modelCol.sortDescriptorPrototype = NSSortDescriptor(key: "model", ascending: true)
+        timeCol.sortDescriptorPrototype = NSSortDescriptor(key: "time", ascending: true)
         table.addTableColumn(stageCol); table.addTableColumn(modelCol); table.addTableColumn(timeCol); table.addTableColumn(errorCol)
         table.dataSource = self; table.delegate = self
         scroll.documentView = table; scroll.hasVerticalScroller = true; scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -108,8 +112,16 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
         let includeAll = (testAllCheckbox.state == .on)
         transModels = SettingsWindowController.filteredModels(transModels, includeAll: includeAll || s.showAllModels)
         cleanModels = SettingsWindowController.filteredModels(cleanModels, includeAll: includeAll || s.showAllModels)
+        // Extra cleanup eligibility filter to avoid non-chat/audio-only models
+        let cleanupExcludedKeywords = ["audio", "tts", "realtime", "embed", "transcribe", "whisper"]
+        cleanModels = cleanModels.filter { id in !cleanupExcludedKeywords.contains { id.localizedCaseInsensitiveContains($0) } }
         results.removeAll(); table.reloadData(); infoLabel.stringValue = "Running benchmark…"
         let client = OpenAIClient()
+
+        // Convert sample to m4a for consistent benchmarking
+        let (m4aURL, convErr) = convertToM4A(sample)
+        let uploadURL = m4aURL ?? sample
+        if let e = convErr { DispatchQueue.main.async { self.infoLabel.stringValue = "Using WAV (conversion failed): \(e)" } }
 
         DispatchQueue.global(qos: .userInitiated).async {
             // Transcription timings
@@ -117,7 +129,7 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
             for m in transModels {
                 let t0 = Date()
                 do {
-                    let txt = try client.transcribe(apiKey: apiKey, audioFileURL: sample, model: m)
+                    let txt = try client.transcribe(apiKey: apiKey, audioFileURL: uploadURL, model: m)
                     let dt = Date().timeIntervalSince(t0)
                     self.append(.init(stage: .transcribe, model: m, duration: dt, error: nil))
                     if referenceText == nil { referenceText = txt }
@@ -146,7 +158,53 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
     private func append(_ r: Result) {
         DispatchQueue.main.async {
             self.results.append(r)
+            self.applySort()
             self.table.reloadData()
+        }
+    }
+
+    private func applySort() {
+        guard let sort = table.sortDescriptors.first else { return }
+        let ascending = sort.ascending
+        switch sort.key {
+        case "time":
+            results.sort { ascending ? $0.duration < $1.duration : $0.duration > $1.duration }
+        case "model":
+            results.sort { ascending ? $0.model.localizedCaseInsensitiveCompare($1.model) == .orderedAscending : $0.model.localizedCaseInsensitiveCompare($1.model) == .orderedDescending }
+        case "stage":
+            results.sort { ascending ? $0.stage.rawValue < $1.stage.rawValue : $0.stage.rawValue > $1.stage.rawValue }
+        default:
+            break
+        }
+    }
+
+    func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+        applySort(); tableView.reloadData()
+    }
+
+    // Convert sample to m4a for upload
+    private func convertToM4A(_ url: URL) -> (URL?, String?) {
+        if url.pathExtension.lowercased() == "m4a" { return (url, nil) }
+        let out = url.deletingPathExtension().appendingPathExtension("m4a")
+        try? FileManager.default.removeItem(at: out)
+        let asset = AVURLAsset(url: url)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+            return (nil, "AVAssetExportSession unavailable")
+        }
+        export.outputURL = out; export.outputFileType = .m4a
+        let sem = DispatchSemaphore(value: 0)
+        export.exportAsynchronously { sem.signal() }
+        sem.wait()
+        switch export.status {
+        case .completed: return (out, nil)
+        case .failed, .cancelled:
+            let err = export.error as NSError?
+            let underlying = (err?.userInfo[NSUnderlyingErrorKey] as? NSError)?.localizedDescription
+            let reason = err?.localizedFailureReason
+            let suggestion = err?.localizedRecoverySuggestion
+            let details = [err?.localizedDescription, reason, suggestion, underlying].compactMap { $0 }.joined(separator: " | ")
+            return (nil, details.isEmpty ? "Unknown export error" : details)
+        default: return (nil, "Export status=\(export.status.rawValue)")
         }
     }
 
