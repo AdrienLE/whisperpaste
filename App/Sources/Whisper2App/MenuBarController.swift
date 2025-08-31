@@ -266,7 +266,7 @@ final class MenuBarController: NSObject {
         }
         export.outputURL = outURL
         export.outputFileType = .m4a
-        let sem = DispatchSemaphore(value: 1)
+        let sem = DispatchSemaphore(value: 0)
         export.exportAsynchronously {
             sem.signal()
         }
