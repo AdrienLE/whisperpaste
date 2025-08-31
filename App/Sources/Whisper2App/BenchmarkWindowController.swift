@@ -4,7 +4,10 @@ import Whisper2Core
 
 final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     struct Result {
-        enum Stage: String { case transcribe = "Transcribe", case cleanup = "Cleanup" }
+        enum Stage: String {
+            case transcribe = "Transcribe"
+            case cleanup = "Cleanup"
+        }
         let stage: Stage
         let model: String
         let duration: TimeInterval
@@ -172,4 +175,3 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
         return cell
     }
 }
-

@@ -270,10 +270,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         guard !includeAll else { return models }
         return models.filter { id in
             if id.localizedCaseInsensitiveContains("preview") { return false }
-            // Ends with two digits? e.g., ...-24 or ...06 or ...2024-08-06
-            if let lastTwo = id.suffix(2).unicodeScalars.map({ CharacterSet.decimalDigits.contains($0) }), lastTwo.count == 2, lastTwo.allSatisfy({ $0 }) {
-                return false
-            }
+            // Ends with two digits? e.g., ...-24 or ...06 or ...2024-08
+            let lastTwo = String(id.suffix(2))
+            let endsWithTwoDigits = lastTwo.count == 2 && lastTwo.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.contains($0) }
+            if endsWithTwoDigits { return false }
             return true
         }
     }
