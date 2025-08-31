@@ -90,13 +90,19 @@ final class MenuBarController: NSObject {
         }
         if isRecording {
             isRecording = false
-            recorder?.stop()
             // Keep popover open and show transcribing state
             previewVC.setState(.transcribing)
             if !popover.isShown, let button = statusItem.button {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
             }
-            runTranscriptionPipeline()
+            // Wait for recorder to finish writing the file before starting pipeline
+            recorder?.onFinish = { [weak self] url in
+                self?.isRecording = false
+                DispatchQueue.main.async {
+                    self?.runTranscriptionPipeline(recordedURL: url)
+                }
+            }
+            recorder?.stop()
         } else {
             isRecording = true
             let rec = SpeechRecorder(historyStore: historyStore, settingsStore: settingsStore)
@@ -107,7 +113,7 @@ final class MenuBarController: NSObject {
                 NSLog("Speech error: \(error)")
                 DispatchQueue.main.async { self?.previewVC.setState(.error(error.localizedDescription)) }
             }
-            rec.onFinish = { [weak self] _ in /* no-op, handled on stop */ self?.isRecording = false }
+            rec.onFinish = { [weak self] _ in /* handled on stop */ self?.isRecording = false }
             recorder = rec
             rec.start()
             setRecordingIcon(true)
@@ -119,10 +125,10 @@ final class MenuBarController: NSObject {
         }
     }
 
-    private func runTranscriptionPipeline() {
+    private func runTranscriptionPipeline(recordedURL: URL? = nil) {
         previewVC.setState(.transcribing)
         let settings = settingsStore.load()
-        guard let audioURL = recorder?.recordedFileURL else {
+        guard let audioURL = recordedURL ?? recorder?.recordedFileURL else {
             // Fallback: no audio captured, use preview text
             NSLog("Pipeline: No audio captured; using live preview text")
             finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: nil, source: "preview")
@@ -142,10 +148,22 @@ final class MenuBarController: NSObject {
             guard let self = self else { return }
             // Prepare audio: convert to m4a (AAC) for API compatibility/size
             let convertStart = Date()
-            let preparedURL = self.prepareAudioForUpload(originalURL: audioURL)
+            let (preparedURL, exportError) = self.prepareAudioForUploadDetailed(originalURL: audioURL)
             let convertDuration = Date().timeIntervalSince(convertStart)
-            if preparedURL != nil {
-                NSLog("Pipeline: Conversion to m4a took %.2fs", convertDuration)
+            if let u = preparedURL {
+                NSLog("Pipeline: Conversion to m4a took %.2fs (file=\(u.lastPathComponent))", convertDuration)
+            } else {
+                NSLog("Pipeline: Conversion to m4a failed after %.2fs: \(exportError ?? "unknown error")", convertDuration)
+                if let details = exportError {
+                    DispatchQueue.main.async {
+                        let alert = NSAlert()
+                        alert.messageText = "Audio Compression Failed"
+                        alert.informativeText = details + "\nProceeding with WAV upload."
+                        alert.alertStyle = .informational
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                }
             }
             let uploadURL = preparedURL ?? audioURL
             // Stage 1: Transcribe
@@ -252,6 +270,46 @@ final class MenuBarController: NSObject {
     }
 
     // Convert recorded audio to m4a (AAC) for OpenAI API compatibility/size.
+    private func prepareAudioForUploadDetailed(originalURL: URL) -> (URL?, String?) {
+        let ext = originalURL.pathExtension.lowercased()
+        if ext == "m4a" { return (originalURL, nil) }
+        let outURL = originalURL.deletingPathExtension().appendingPathExtension("m4a")
+        try? FileManager.default.removeItem(at: outURL)
+        let asset = AVURLAsset(url: originalURL)
+        let duration = CMTimeGetSeconds(asset.duration)
+        NSLog("Pipeline: Source audio duration %.2fs", duration)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
+            let details = "AVAssetExportSession unavailable for file: \(originalURL.lastPathComponent)"
+            NSLog("Pipeline: \(details)")
+            return (nil, details)
+        }
+        export.outputURL = outURL
+        export.outputFileType = .m4a
+        let sem = DispatchSemaphore(value: 0)
+        export.exportAsynchronously { sem.signal() }
+        sem.wait()
+        switch export.status {
+        case .completed:
+            NSLog("Pipeline: Exported m4a -> \(outURL.lastPathComponent)")
+            return (outURL, nil)
+        case .failed, .cancelled:
+            let err = export.error as NSError?
+            let underlying = (err?.userInfo[NSUnderlyingErrorKey] as? NSError)?.localizedDescription
+            let reason = err?.localizedFailureReason
+            let suggestion = err?.localizedRecoverySuggestion
+            let errDetails = [
+                "status=\(export.status.rawValue)",
+                err?.localizedDescription,
+                reason,
+                suggestion,
+                underlying
+            ].compactMap { $0 }.joined(separator: " | ")
+            NSLog("Pipeline: m4a export failed: \(errDetails)")
+            return (nil, errDetails.isEmpty ? "Unknown export error" : errDetails)
+        default:
+            return (nil, "Export ended with status=\(export.status.rawValue)")
+        }
+    }
     private func prepareAudioForUpload(originalURL: URL) -> URL? {
         let ext = originalURL.pathExtension.lowercased()
         if ext == "m4a" { return originalURL }
