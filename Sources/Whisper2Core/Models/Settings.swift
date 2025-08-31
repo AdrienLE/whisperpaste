@@ -10,6 +10,7 @@ public struct Settings: Codable, Equatable {
     public var knownTranscriptionModels: [String]? // persisted list from last refresh
     public var knownCleanupModels: [String]? // persisted list from last refresh
     public var lastModelRefresh: Date?
+    public var showAllModels: Bool
 
     public init(
         openAIKey: String? = nil,
@@ -20,7 +21,8 @@ public struct Settings: Codable, Equatable {
         hotkey: String = "ctrl+shift+space",
         knownTranscriptionModels: [String]? = nil,
         knownCleanupModels: [String]? = nil,
-        lastModelRefresh: Date? = nil
+        lastModelRefresh: Date? = nil,
+        showAllModels: Bool = false
     ) {
         self.openAIKey = openAIKey
         self.transcriptionModel = transcriptionModel
@@ -31,6 +33,7 @@ public struct Settings: Codable, Equatable {
         self.knownTranscriptionModels = knownTranscriptionModels
         self.knownCleanupModels = knownCleanupModels
         self.lastModelRefresh = lastModelRefresh
+        self.showAllModels = showAllModels
     }
 }
 

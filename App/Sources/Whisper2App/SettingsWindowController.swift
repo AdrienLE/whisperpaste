@@ -12,6 +12,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let promptEditor = MultilineTextEditor(editable: true)
     private let keepAudioCheckbox = NSButton(checkboxWithTitle: "Keep audio files", target: nil, action: nil)
     private let hotkeyField = NSTextField()
+    private let showAllModelsCheckbox = NSButton(checkboxWithTitle: "Show all models", target: nil, action: nil)
 
     var onSaved: ((Settings) -> Void)?
 
@@ -48,6 +49,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let rows: [NSView] = [
             makeRow(title: "OpenAI API Key:", field: apiKeyField),
             modelsRow(),
+            showAllModelsCheckbox,
             makePromptRow(),
             makeRow(title: "Hotkey:", field: hotkeyRecorder),
             keepAudioCheckbox
@@ -103,6 +105,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         hotkeyField.placeholderString = "ctrl+shift+space"
         hotkeyRecorder.onChange = { [weak self] combo in self?.hotkeyField.stringValue = combo }
+
+        showAllModelsCheckbox.target = self
+        showAllModelsCheckbox.action = #selector(toggleShowAllModels)
     }
 
     private func makeRow(title: String, field: NSView) -> NSView {
@@ -161,14 +166,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // Populate from persisted model lists if present
         transcriptionPopup.removeAllItems()
         if let models = settings.knownTranscriptionModels, !models.isEmpty {
-            transcriptionPopup.addItems(withTitles: models)
+            let filtered = Self.filteredModels(models, includeAll: settings.showAllModels)
+            transcriptionPopup.addItems(withTitles: filtered)
         }
         if transcriptionPopup.itemTitles.isEmpty { transcriptionPopup.addItems(withTitles: ["Loading models…"]) }
         transcriptionPopup.selectItem(withTitle: settings.transcriptionModel)
 
         cleanupPopup.removeAllItems()
         if let models = settings.knownCleanupModels, !models.isEmpty {
-            cleanupPopup.addItems(withTitles: models)
+            let filtered = Self.filteredModels(models, includeAll: settings.showAllModels)
+            cleanupPopup.addItems(withTitles: filtered)
         }
         if cleanupPopup.itemTitles.isEmpty { cleanupPopup.addItems(withTitles: ["Loading models…"]) }
         cleanupPopup.selectItem(withTitle: settings.cleanupModel)
@@ -176,6 +183,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         keepAudioCheckbox.state = settings.keepAudioFiles ? .on : .off
         hotkeyField.stringValue = settings.hotkey
         hotkeyRecorder.hotkeyString = settings.hotkey
+        showAllModelsCheckbox.state = settings.showAllModels ? .on : .off
     }
 
     @objc private func saveTapped() {
@@ -185,6 +193,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         settings.cleanupPrompt = promptEditor.string
         settings.keepAudioFiles = (keepAudioCheckbox.state == .on)
         settings.hotkey = hotkeyField.stringValue
+        settings.showAllModels = (showAllModelsCheckbox.state == .on)
         do {
             try settingsStore.save(settings)
             onSaved?(settings)
@@ -221,10 +230,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                     self.settings.lastModelRefresh = Date()
                     try? self.settingsStore.save(self.settings)
 
+                    let showAll = self.settings.showAllModels
                     self.transcriptionPopup.removeAllItems()
-                    self.transcriptionPopup.addItems(withTitles: transcription)
+                    self.transcriptionPopup.addItems(withTitles: Self.filteredModels(transcription, includeAll: showAll))
                     self.cleanupPopup.removeAllItems()
-                    self.cleanupPopup.addItems(withTitles: cleanup)
+                    self.cleanupPopup.addItems(withTitles: Self.filteredModels(cleanup, includeAll: showAll))
 
                     // Select the user’s current choices, or fall back to first item
                     if self.transcriptionPopup.itemTitles.contains(self.settings.transcriptionModel) {
@@ -253,5 +263,32 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let clean = models.filter { $0.hasPrefix("gpt-") }
         return (trans.isEmpty ? ["whisper-1", "gpt-4o-mini-transcribe"] : trans,
                 clean.isEmpty ? ["gpt-4o-mini", "gpt-4o"] : clean)
+    }
+
+    // Hide models containing "preview" or ending with two digits when includeAll == false
+    static func filteredModels(_ models: [String], includeAll: Bool) -> [String] {
+        guard !includeAll else { return models }
+        return models.filter { id in
+            if id.localizedCaseInsensitiveContains("preview") { return false }
+            // Ends with two digits? e.g., ...-24 or ...06 or ...2024-08-06
+            if let lastTwo = id.suffix(2).unicodeScalars.map({ CharacterSet.decimalDigits.contains($0) }), lastTwo.count == 2, lastTwo.allSatisfy({ $0 }) {
+                return false
+            }
+            return true
+        }
+    }
+
+    @objc private func toggleShowAllModels() {
+        settings.showAllModels = (showAllModelsCheckbox.state == .on)
+        // Re-apply filtering to current lists without refetching
+        let trans = settings.knownTranscriptionModels ?? []
+        let clean = settings.knownCleanupModels ?? []
+        transcriptionPopup.removeAllItems()
+        transcriptionPopup.addItems(withTitles: Self.filteredModels(trans, includeAll: settings.showAllModels))
+        cleanupPopup.removeAllItems()
+        cleanupPopup.addItems(withTitles: Self.filteredModels(clean, includeAll: settings.showAllModels))
+        // Keep current selections if possible
+        transcriptionPopup.selectItem(withTitle: settings.transcriptionModel)
+        cleanupPopup.selectItem(withTitle: settings.cleanupModel)
     }
 }

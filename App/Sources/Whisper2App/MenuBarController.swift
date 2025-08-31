@@ -16,6 +16,7 @@ final class MenuBarController: NSObject {
     private let settingsStore = SettingsStore()
     private let historyStore = HistoryStore()
     private var settingsWC: SettingsWindowController?
+    private var benchmarkWC: BenchmarkWindowController?
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -59,6 +60,7 @@ final class MenuBarController: NSObject {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "History", action: #selector(openHistory), keyEquivalent: "h"))
+        menu.addItem(NSMenuItem(title: "Benchmark", action: #selector(openBenchmark), keyEquivalent: "b"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
         menu.items.forEach { $0.target = self }
@@ -380,6 +382,11 @@ final class MenuBarController: NSObject {
 
     @objc private func openHistory() {
         HistoryWindowController(historyStore: historyStore).show()
+    }
+
+    @objc private func openBenchmark() {
+        if benchmarkWC == nil { benchmarkWC = BenchmarkWindowController(settingsStore: settingsStore) }
+        benchmarkWC?.show()
     }
 
     @objc private func quit() {
