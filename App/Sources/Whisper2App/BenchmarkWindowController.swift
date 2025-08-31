@@ -81,7 +81,6 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
     }
 
     @objc private func startRecord() {
-        let s = settingsStore.load()
         recorder = SpeechRecorder(historyStore: historyStore, settingsStore: settingsStore)
         recordButton.isEnabled = false; stopButton.isEnabled = true
         results.removeAll(); table.reloadData()
