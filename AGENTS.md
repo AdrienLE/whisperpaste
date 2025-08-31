@@ -4,6 +4,7 @@ Working Agreement
 - Always update `PLAN.md` when scope or progress changes.
 - Keep changes small, frequent, and focused. Write clear commit messages referencing the plan.
 - Run `scripts/test.sh` before committing; only commit when tests pass and the app at least builds.
+- After any successful change, run tests and commit the change with a clear message that references the related `PLAN.md` entry.
 - If blocked (e.g., missing toolchain), push plan updates without committing risky changes and note blockers in the PR/commit message.
 
 Coding Guidelines

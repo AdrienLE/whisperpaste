@@ -1,7 +1,7 @@
 import AppKit
 import Whisper2Core
 
-final class SettingsWindowController: NSWindowController {
+final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let settingsStore: SettingsStore
     private var settings: Settings
 
@@ -23,6 +23,7 @@ final class SettingsWindowController: NSWindowController {
                               backing: .buffered, defer: false)
         window.title = "Whisper2 Settings"
         super.init(window: window)
+        window.delegate = self
         setupUI()
         loadValues()
     }
@@ -32,7 +33,13 @@ final class SettingsWindowController: NSWindowController {
     func show() {
         self.window?.center()
         self.window?.makeKeyAndOrderFront(nil)
+        // Show a Dock icon while Settings is visible for easy access
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        // Auto-refresh models on first open if never refreshed
+        if settings.lastModelRefresh == nil {
+            refreshModels()
+        }
     }
 
     private func setupUI() {
@@ -41,7 +48,7 @@ final class SettingsWindowController: NSWindowController {
         let rows: [NSView] = [
             makeRow(title: "OpenAI API Key:", field: apiKeyField),
             modelsRow(),
-            makePromptSection(),
+            makePromptRow(),
             makeRow(title: "Hotkey:", field: hotkeyRecorder),
             keepAudioCheckbox
         ]
@@ -50,20 +57,34 @@ final class SettingsWindowController: NSWindowController {
         vstack.spacing = 12
         vstack.translatesAutoresizingMaskIntoConstraints = false
 
+        // Bottom action bar: Refresh Models, spacer, Cancel, Save
+        let refreshButton = NSButton(title: "Refresh Models", target: self, action: #selector(refreshModels))
+        refreshButton.bezelStyle = .rounded
+        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelTapped))
+        cancelButton.bezelStyle = .rounded
+        cancelButton.keyEquivalent = "\u{1b}" // escape
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveTapped))
         saveButton.bezelStyle = .rounded
         saveButton.keyEquivalent = "\r"
-        saveButton.translatesAutoresizingMaskIntoConstraints = false
+        let spacer = NSView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        let buttonBar = NSStackView(views: [refreshButton, spacer, cancelButton, saveButton])
+        buttonBar.orientation = .horizontal
+        buttonBar.spacing = 8
+        buttonBar.alignment = .centerY
+        buttonBar.translatesAutoresizingMaskIntoConstraints = false
 
         content.addSubview(vstack)
-        content.addSubview(saveButton)
+        content.addSubview(buttonBar)
         NSLayoutConstraint.activate([
             vstack.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
             vstack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             vstack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            saveButton.topAnchor.constraint(greaterThanOrEqualTo: vstack.bottomAnchor, constant: 12),
-            saveButton.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            saveButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16)
+            buttonBar.topAnchor.constraint(greaterThanOrEqualTo: vstack.bottomAnchor, constant: 12),
+            buttonBar.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            buttonBar.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            buttonBar.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            spacer.widthAnchor.constraint(greaterThanOrEqualToConstant: 8)
         ])
 
         // Configure fields
@@ -72,8 +93,9 @@ final class SettingsWindowController: NSWindowController {
         apiKeyField.controlSize = .regular
         apiKeyField.isBezeled = true
 
-        transcriptionPopup.addItems(withTitles: ["whisper-1"]) // will be refreshed
-        cleanupPopup.addItems(withTitles: ["gpt-4o-mini"]) // will be refreshed
+        // Items will be populated from persisted lists or via refreshModels()
+        transcriptionPopup.removeAllItems()
+        cleanupPopup.removeAllItems()
 
         promptEditor.translatesAutoresizingMaskIntoConstraints = false
         promptEditor.heightAnchor.constraint(equalToConstant: 220).isActive = true
@@ -98,14 +120,23 @@ final class SettingsWindowController: NSWindowController {
         return row
     }
 
-    private func makePromptSection() -> NSView {
+    private func makePromptRow() -> NSView {
         let label = NSTextField(labelWithString: "Cleanup Prompt:")
-        label.alignment = .left
-        let v = NSStackView(views: [label, promptEditor])
-        v.orientation = .vertical
-        v.spacing = 6
-        v.translatesAutoresizingMaskIntoConstraints = false
-        return v
+        label.alignment = .right
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let row = NSStackView(views: [label, promptEditor])
+        row.orientation = .horizontal
+        row.alignment = .top
+        row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        promptEditor.translatesAutoresizingMaskIntoConstraints = false
+        promptEditor.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        // Ensure the editor expands and has a sensible minimum width
+        promptEditor.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        promptEditor.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        promptEditor.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return row
     }
 
     private lazy var hotkeyRecorder: HotkeyRecorderView = {
@@ -120,26 +151,26 @@ final class SettingsWindowController: NSWindowController {
         h.spacing = 8
         let row1 = makeRow(title: "Transcription Model:", field: transcriptionPopup)
         let row2 = makeRow(title: "Cleanup Model:", field: cleanupPopup)
-        let refresh = NSButton(title: "Refresh Models", target: self, action: #selector(refreshModels))
-        let mini = NSStackView(views: [refresh])
-        mini.orientation = .horizontal
-        mini.alignment = .leading
-        mini.spacing = 8
         h.addArrangedSubview(row1)
         h.addArrangedSubview(row2)
-        h.addArrangedSubview(mini)
         return h
     }
 
     private func loadValues() {
         apiKeyField.stringValue = settings.openAIKey ?? ""
-        if !transcriptionPopup.itemTitles.contains(settings.transcriptionModel) {
-            transcriptionPopup.addItem(withTitle: settings.transcriptionModel)
+        // Populate from persisted model lists if present
+        transcriptionPopup.removeAllItems()
+        if let models = settings.knownTranscriptionModels, !models.isEmpty {
+            transcriptionPopup.addItems(withTitles: models)
         }
+        if transcriptionPopup.itemTitles.isEmpty { transcriptionPopup.addItems(withTitles: ["Loading models…"]) }
         transcriptionPopup.selectItem(withTitle: settings.transcriptionModel)
-        if !cleanupPopup.itemTitles.contains(settings.cleanupModel) {
-            cleanupPopup.addItem(withTitle: settings.cleanupModel)
+
+        cleanupPopup.removeAllItems()
+        if let models = settings.knownCleanupModels, !models.isEmpty {
+            cleanupPopup.addItems(withTitles: models)
         }
+        if cleanupPopup.itemTitles.isEmpty { cleanupPopup.addItems(withTitles: ["Loading models…"]) }
         cleanupPopup.selectItem(withTitle: settings.cleanupModel)
         promptEditor.string = settings.cleanupPrompt
         keepAudioCheckbox.state = settings.keepAudioFiles ? .on : .off
@@ -163,6 +194,16 @@ final class SettingsWindowController: NSWindowController {
         }
     }
 
+    @objc private func cancelTapped() {
+        self.window?.close()
+    }
+
+    // MARK: - NSWindowDelegate
+    func windowWillClose(_ notification: Notification) {
+        // Hide Dock icon again when Settings is closed
+        NSApp.setActivationPolicy(.accessory)
+    }
+
     @objc private func refreshModels() {
         let candidate = apiKeyField.stringValue.isEmpty ? (settings.openAIKey ?? "") : apiKeyField.stringValue
         guard !candidate.isEmpty else { NSSound.beep(); return }
@@ -174,10 +215,32 @@ final class SettingsWindowController: NSWindowController {
                 let models = try client.listModels(apiKey: apiKey)
                 let (transcription, cleanup) = Self.partitionModels(models: models)
                 DispatchQueue.main.async {
-                    self.transcriptionPopup.removeAllItems(); self.transcriptionPopup.addItems(withTitles: transcription)
-                    self.cleanupPopup.removeAllItems(); self.cleanupPopup.addItems(withTitles: cleanup)
-                    self.transcriptionPopup.selectItem(withTitle: self.settings.transcriptionModel)
-                    self.cleanupPopup.selectItem(withTitle: self.settings.cleanupModel)
+                    // Persist lists and mark last refresh
+                    self.settings.knownTranscriptionModels = transcription
+                    self.settings.knownCleanupModels = cleanup
+                    self.settings.lastModelRefresh = Date()
+                    try? self.settingsStore.save(self.settings)
+
+                    self.transcriptionPopup.removeAllItems()
+                    self.transcriptionPopup.addItems(withTitles: transcription)
+                    self.cleanupPopup.removeAllItems()
+                    self.cleanupPopup.addItems(withTitles: cleanup)
+
+                    // Select the user’s current choices, or fall back to first item
+                    if self.transcriptionPopup.itemTitles.contains(self.settings.transcriptionModel) {
+                        self.transcriptionPopup.selectItem(withTitle: self.settings.transcriptionModel)
+                    } else {
+                        self.transcriptionPopup.selectItem(at: 0)
+                        self.settings.transcriptionModel = self.transcriptionPopup.titleOfSelectedItem ?? self.settings.transcriptionModel
+                        try? self.settingsStore.save(self.settings)
+                    }
+                    if self.cleanupPopup.itemTitles.contains(self.settings.cleanupModel) {
+                        self.cleanupPopup.selectItem(withTitle: self.settings.cleanupModel)
+                    } else {
+                        self.cleanupPopup.selectItem(at: 0)
+                        self.settings.cleanupModel = self.cleanupPopup.titleOfSelectedItem ?? self.settings.cleanupModel
+                        try? self.settingsStore.save(self.settings)
+                    }
                 }
             } catch {
                 DispatchQueue.main.async { NSSound.beep() }

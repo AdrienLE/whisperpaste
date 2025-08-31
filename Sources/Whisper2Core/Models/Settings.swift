@@ -7,6 +7,9 @@ public struct Settings: Codable, Equatable {
     public var cleanupPrompt: String
     public var keepAudioFiles: Bool
     public var hotkey: String // simple placeholder, e.g., "ctrl+shift+space"
+    public var knownTranscriptionModels: [String]? // persisted list from last refresh
+    public var knownCleanupModels: [String]? // persisted list from last refresh
+    public var lastModelRefresh: Date?
 
     public init(
         openAIKey: String? = nil,
@@ -14,7 +17,10 @@ public struct Settings: Codable, Equatable {
         cleanupModel: String = "gpt-4o-mini",
         cleanupPrompt: String = "Rewrite text for clarity and grammar.",
         keepAudioFiles: Bool = true,
-        hotkey: String = "ctrl+shift+space"
+        hotkey: String = "ctrl+shift+space",
+        knownTranscriptionModels: [String]? = nil,
+        knownCleanupModels: [String]? = nil,
+        lastModelRefresh: Date? = nil
     ) {
         self.openAIKey = openAIKey
         self.transcriptionModel = transcriptionModel
@@ -22,6 +28,9 @@ public struct Settings: Codable, Equatable {
         self.cleanupPrompt = cleanupPrompt
         self.keepAudioFiles = keepAudioFiles
         self.hotkey = hotkey
+        self.knownTranscriptionModels = knownTranscriptionModels
+        self.knownCleanupModels = knownCleanupModels
+        self.lastModelRefresh = lastModelRefresh
     }
 }
 

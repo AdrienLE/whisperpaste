@@ -27,11 +27,14 @@ Phases
    - Cleanup via GPT with customizable prompt [implemented].
    - Settings UI for API key, models, prompt, and hotkey [implemented].
    - Fetch model list dynamically from OpenAI API (Refresh Models) [implemented].
+   - Persist fetched model lists; auto-refresh on first open of Settings; avoid hardcoded defaults when lists are available [added].
 
 5) UX Polish (in progress)
    - Popover live text, progress, and error handling [in place].
    - History list with copy raw/cleaned, reveal/play audio, missing-audio handling [basic copy implemented; reveal/play pending].
    - Global hotkey support (customizable) [hotkey recorder + Carbon registration added; needs verification under packaged app].
+   - Dock icon only while Settings is open [added].
+   - Live preview auto-scroll and animated in-progress indicator during recording [added].
 
 6) Tests + QA
    - Unit tests for storage, hotkey parsing, and path helpers [added].
@@ -41,6 +44,17 @@ Current Status (as of this update)
 - Implemented: menu bar app, live preview (Apple Speech), OpenAI transcription + cleanup pipeline, Settings (editable + Save closes), History, dynamic model fetch, hotkey recorder UI, basic global hotkey manager, packaging script for `.app`.
 - Permissions: For reliable mic/speech prompts, use the packaged app (`scripts/package_app.sh` then `open dist/Whisper2.app`).
 - Known issues: Building the `App` SwiftPM package in this environment sporadically fails after linking Carbon (for global hotkeys). Tests for `Whisper2Core` continue to pass. To resolve, test via the packaged app and/or migrate to an Xcode project for full control over entitlements and linking.
+
+Bug Fixes (2025-08-25)
+- Live Preview readability: switched preview editor to a true read-only presentation (no border/background, no first responder), and unified text coloring to `labelColor` to ensure dark-mode visibility within popovers.
+- Cleanup Prompt visibility (dark mode): removed custom text/insertion/typing color overrides in the multiline editor and now rely on system default colors. This makes the prompt text visible in dark mode and avoids over-customization.
+- Settings layout polish: aligned Cleanup Prompt with other rows (label column, full-width editor), moved “Refresh Models” to bottom action bar next to new Cancel and existing Save buttons.
+
+Bug Fixes (2025-08-31)
+- Invisible text in preview and prompt: fixed `NSTextView` embedding by sizing the document view to the scroll view’s content size and enabling `textContainer.widthTracksTextView` + large container height. This resolves the zero-width/zero-height layout that made text effectively invisible.
+- Undo/Redo in prompt editor: enabled `textView.allowsUndo = true` in editable mode so Cmd+Z/Cmd+Shift+Z work as expected.
+- Minor: ensured the text view is vertically resizable with an unbounded container size to prevent clipping.
+- Prompt editor scrolling: adjusted layout to set document width to the scroll view while letting height expand to the content’s used rect; the document height now exceeds the viewport when needed, enabling vertical scrolling.
 
 Next Steps
 - Verify global hotkey registration end-to-end in the packaged app; update icon state and popover accordingly.

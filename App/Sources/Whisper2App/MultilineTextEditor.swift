@@ -2,52 +2,77 @@ import AppKit
 
 final class MultilineTextEditor: NSView {
     let scroll = NSScrollView()
-    let textView = NSTextView()
+    let textView: NSTextView
     private let defaultFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
 
+    private let isEditableMode: Bool
     var onChange: ((String) -> Void)?
 
     init(editable: Bool) {
+        self.isEditableMode = editable
+        self.textView = editable ? PasteCapableTextView() : NSTextView()
         super.init(frame: .zero)
-        setup(editable: editable)
+        setup()
     }
 
     required init?(coder: NSCoder) {
+        self.isEditableMode = true
+        self.textView = PasteCapableTextView()
         super.init(coder: coder)
-        setup(editable: true)
+        setup()
     }
 
-    private func setup(editable: Bool) {
+    private func setup() {
         translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
 
         // Configure text view appearance and behavior
-        textView.isEditable = editable
+        textView.isEditable = isEditableMode
         textView.isSelectable = true
-        textView.font = defaultFont
         textView.isRichText = false
         textView.usesFontPanel = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
-        textView.textColor = NSColor.textColor
-        textView.insertionPointColor = NSColor.textColor
-        textView.drawsBackground = true
-        textView.backgroundColor = NSColor.textBackgroundColor
+        // Sizing/embedding in NSScrollView: use frame-based layout for the documentView
+        // and configure the text container to track width for proper layout and visibility.
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.typingAttributes = [
-            .foregroundColor: NSColor.textColor,
-            .font: defaultFont
-        ]
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        if let container = textView.textContainer {
+            container.containerSize = NSSize(width: scroll.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+            container.widthTracksTextView = true
+        }
+        if isEditableMode {
+            textView.allowsUndo = true
+        }
 
         NotificationCenter.default.addObserver(self, selector: #selector(textDidChange(_:)), name: NSText.didChangeNotification, object: textView)
 
         // Configure scroll view
-        scroll.borderType = .bezelBorder
         scroll.hasVerticalScroller = true
-        scroll.drawsBackground = true
-        scroll.backgroundColor = NSColor.textBackgroundColor
         scroll.documentView = textView
         scroll.translatesAutoresizingMaskIntoConstraints = false
+
+        if isEditableMode {
+            // Explicit, adaptive colors for dark/light mode
+            textView.drawsBackground = true
+            textView.backgroundColor = NSColor.textBackgroundColor
+            textView.textColor = NSColor.textColor
+            textView.insertionPointColor = NSColor.textColor
+            textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            scroll.drawsBackground = false
+            scroll.borderType = .bezelBorder
+        } else {
+            // Read-only look
+            textView.font = defaultFont
+            textView.drawsBackground = false
+            textView.textColor = NSColor.labelColor
+            scroll.drawsBackground = false
+            scroll.borderType = .noBorder
+            textView.textContainerInset = NSSize(width: 4, height: 6)
+        }
 
         addSubview(scroll)
         NSLayoutConstraint.activate([
@@ -61,37 +86,60 @@ final class MultilineTextEditor: NSView {
     deinit { NotificationCenter.default.removeObserver(self) }
 
     @objc private func textDidChange(_ note: Notification) {
-        applyDefaultAttributes()
         onChange?(textView.string)
     }
 
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { isEditableMode }
     override func becomeFirstResponder() -> Bool {
+        guard isEditableMode else { return false }
         window?.makeFirstResponder(textView)
         return true
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(textView)
-        textView.mouseDown(with: event)
+        if isEditableMode {
+            window?.makeFirstResponder(textView)
+            textView.mouseDown(with: event)
+        } else {
+            super.mouseDown(with: event)
+        }
     }
 
     var string: String {
         get { textView.string }
-        set {
-            textView.string = newValue
-            applyDefaultAttributes()
-        }
+        set { textView.string = newValue }
     }
 
-    private func applyDefaultAttributes() {
-        let length = (textView.string as NSString).length
-        guard length > 0, let storage = textView.textStorage else { return }
-        storage.beginEditing()
-        storage.setAttributes([
-            .foregroundColor: NSColor.textColor,
-            .font: defaultFont
-        ], range: NSRange(location: 0, length: length))
-        storage.endEditing()
+    func scrollToEnd() {
+        guard !textView.string.isEmpty else { return }
+        if let lm = textView.layoutManager, let tc = textView.textContainer {
+            lm.ensureLayout(for: tc)
+        }
+        textView.scrollToEndOfDocument(nil)
+    }
+
+    override func layout() {
+        super.layout()
+        // Keep the text view width in sync with the scroll content width
+        let viewport = scroll.contentSize
+        if textView.frame.size.width != viewport.width {
+            textView.setFrameSize(NSSize(width: viewport.width, height: textView.frame.size.height))
+        }
+        if let container = textView.textContainer {
+            let expected = NSSize(width: viewport.width, height: CGFloat.greatestFiniteMagnitude)
+            if container.containerSize != expected { container.containerSize = expected }
+            if container.widthTracksTextView == false { container.widthTracksTextView = true }
+        }
+        // Compute required content height and allow the document view to grow beyond the viewport to enable scrolling
+        if let lm = textView.layoutManager, let tc = textView.textContainer {
+            lm.ensureLayout(for: tc)
+            let used = lm.usedRect(for: tc).integral
+            let inset = textView.textContainerInset
+            let requiredHeight = used.size.height + inset.height * 2
+            let newHeight = max(requiredHeight, viewport.height)
+            if abs(textView.frame.size.height - newHeight) > 0.5 {
+                textView.setFrameSize(NSSize(width: viewport.width, height: newHeight))
+            }
+        }
     }
 }

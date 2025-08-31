@@ -7,6 +7,8 @@ final class LivePreviewViewController: NSViewController {
     private let spinner = NSProgressIndicator()
     private let editor = MultilineTextEditor(editable: false)
     private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
+    private var recordingIndicatorTimer: Timer?
+    private var indicatorStep = 0
 
     private(set) var currentText: String = ""
     private(set) var state: State = .idle
@@ -58,32 +60,73 @@ final class LivePreviewViewController: NSViewController {
             statusLabel.stringValue = "Idle"
             spinner.stopAnimation(nil)
             stopButton.isHidden = true
+            stopIndicator()
+            refreshEditor()
         case .recording:
             statusLabel.stringValue = "Recording…"
             spinner.startAnimation(nil)
             stopButton.isHidden = false
+            startIndicator()
+            refreshEditor()
         case .transcribing:
-            statusLabel.stringValue = "Transcribing with OpenAI…"
+            statusLabel.stringValue = "Transcribing…"
             spinner.startAnimation(nil)
             stopButton.isHidden = true
+            stopIndicator()
+            refreshEditor()
         case .cleaning:
-            statusLabel.stringValue = "Cleaning up text…"
+            statusLabel.stringValue = "Cleaning up…"
             spinner.startAnimation(nil)
             stopButton.isHidden = true
+            stopIndicator()
+            refreshEditor()
         case .error(let msg):
             statusLabel.stringValue = "Error: \(msg)"
             spinner.stopAnimation(nil)
             stopButton.isHidden = true
+            stopIndicator()
+            refreshEditor()
         }
     }
 
     func update(text: String) {
         currentText = text
-        editor.string = text.isEmpty ? "Speak to see live preview…" : text
+        refreshEditor()
     }
 
     func reset() {
         currentText = ""
-        editor.string = "Speak to see live preview…"
+        refreshEditor()
+    }
+
+    private func refreshEditor() {
+        let base = currentText.isEmpty ? "Speak to see live preview…" : currentText
+        if state == .recording && !currentText.isEmpty {
+            editor.string = base + indicatorString()
+        } else {
+            editor.string = base
+        }
+        editor.scrollToEnd()
+    }
+
+    private func startIndicator() {
+        stopIndicator()
+        indicatorStep = 0
+        recordingIndicatorTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self, self.state == .recording else { return }
+            self.indicatorStep = (self.indicatorStep + 1) % 4
+            self.refreshEditor()
+        }
+        RunLoop.main.add(recordingIndicatorTimer!, forMode: .common)
+    }
+
+    private func stopIndicator() {
+        recordingIndicatorTimer?.invalidate()
+        recordingIndicatorTimer = nil
+    }
+
+    private func indicatorString() -> String {
+        let dots = [" ∘", " ∘·", " ∘··", " ∘···"]
+        return dots[indicatorStep]
     }
 }
