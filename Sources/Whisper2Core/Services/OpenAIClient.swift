@@ -62,13 +62,13 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Some models only support default temperature; omit the parameter entirely.
         let body: [String: Any] = [
             "model": model,
             "messages": [
                 ["role": "system", "content": prompt],
                 ["role": "user", "content": text]
-            ],
-            "temperature": 0.2
+            ]
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         let (data, resp) = try syncRequest(req)

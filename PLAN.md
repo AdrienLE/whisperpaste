@@ -57,7 +57,8 @@ Bug Fixes (2025-08-31)
 - Prompt editor scrolling: adjusted layout to set document width to the scroll view while letting height expand to the content’s used rect; the document height now exceeds the viewport when needed, enabling vertical scrolling.
  - Live preview auto-scroll during recording: added `autoScrollToEnd` behavior in the read-only editor and trigger scrolling as content grows.
  - Recording UI stability: keep Stop button space reserved (alpha toggle) to avoid layout jumps when entering/leaving recording.
- - Indicator polish: switched to animated three dots (no leading big dot) and colored with accent color for visibility.
+- Indicator polish: switched to animated three dots (no leading big dot) and colored with accent color for visibility.
+- Cleanup HTTP 400: removed `temperature` from cleanup API calls because some models only accept the default; avoids unsupported-parameter errors.
 
 Next Steps
 - Verify global hotkey registration end-to-end in the packaged app; update icon state and popover accordingly.
