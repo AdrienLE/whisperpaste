@@ -26,7 +26,8 @@ if [[ -f "$ICON_SRC" ]]; then
     if (( W > H )); then SIDE=$W; else SIDE=$H; fi
     # 0% padding: center on tight square canvas only (no extra extent)
     # Tight square, grayscale, make near-white transparent; thicken at full res, then downscale crisply and sharpen
-    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate Disk:1 +channel -resize 18x18 "$STATUS_ICON" || true
+    DILATE_KERNEL="${WP_TRAY_DILATE:-Disk:2}"
+    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 18x18 "$STATUS_ICON" || true
   else
     # Fallback: basic resize; template rendering by macOS will tint it
     sips -s format png -z 18 18 "$ICON_SRC" --out "$STATUS_ICON" >/dev/null || true
