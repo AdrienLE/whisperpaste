@@ -25,8 +25,8 @@ if [[ -f "$ICON_SRC" ]]; then
     [[ -z "$W" || -z "$H" ]] && W=1024 && H=1024
     if (( W > H )); then SIDE=$W; else SIDE=$H; fi
     # 0% padding: center on tight square canvas only (no extra extent)
-    # Tight square, grayscale, make near-white transparent, then slightly thicken by dilating alpha
-    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -resize 18x18 -channel A -morphology Dilate Disk:1 +channel "$STATUS_ICON" || true
+    # Tight square, grayscale, make near-white transparent; thicken at full res, then downscale crisply and sharpen
+    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate Disk:1 +channel -filter point -resize 18x18 -unsharp 0x1 "$STATUS_ICON" || true
   else
     # Fallback: basic resize; template rendering by macOS will tint it
     sips -s format png -z 18 18 "$ICON_SRC" --out "$STATUS_ICON" >/dev/null || true
