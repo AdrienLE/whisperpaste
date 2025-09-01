@@ -6,7 +6,7 @@ if [[ "$OS" != "Darwin" ]]; then
   echo "[run] This app can only run on macOS (Darwin)." >&2
   exit 1
 fi
-echo "[run] Preparing dev tray icon (trim + 5% padding, grayscale)..."
+echo "[run] Preparing dev tray icon (trim tight, grayscale)..."
 cd App/.. || exit 1
 ICON_SRC="icon.png"
 DEV_ICON_DIR="dist/.dev_icon"

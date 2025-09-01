@@ -24,9 +24,9 @@ STATUS_OUT1="${APP_DIR}/Contents/Resources/statusIconTemplate.png"
 STATUS_OUT2="${APP_DIR}/Contents/Resources/statusIconTemplate@2x.png"
 
 if [[ -f "$ICON_SRC" ]]; then
-  echo "[package] Preparing icon assets from ${ICON_SRC} (trim + 5% padding)..."
+  echo "[package] Preparing icon assets from ${ICON_SRC} (trim tight, 0% padding)..."
   rm -rf "$ICON_WORK_DIR" && mkdir -p "$ICONSET_DIR"
-  # Use ImageMagick if available to trim transparent margins and add ~5% padding.
+  # Use ImageMagick if available to trim transparent margins (no extra padding).
   if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1 || command -v identify >/dev/null 2>&1; then
     # Choose ImageMagick entrypoint
     if command -v magick >/dev/null 2>&1; then IM_CONVERT=(magick); IM_IDENTIFY=(magick identify);
