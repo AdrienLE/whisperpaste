@@ -27,8 +27,8 @@ if [[ -f "$ICON_SRC" ]]; then
     # 0% padding: center on tight square canvas only (no extra extent)
     "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -resize 18x18 "$STATUS_ICON" || true
   else
-    # Fallback: basic grayscale + resize
-    sips -s format png -s colorModel Gray -z 18 18 "$ICON_SRC" --out "$STATUS_ICON" >/dev/null || true
+    # Fallback: basic resize; template rendering by macOS will tint it
+    sips -s format png -z 18 18 "$ICON_SRC" --out "$STATUS_ICON" >/dev/null || true
   fi
   export WP_STATUS_ICON_PATH="$STATUS_ICON"
 fi
