@@ -27,21 +27,20 @@ if [[ -f "$ICON_SRC" ]]; then
   echo "[package] Preparing icon assets from ${ICON_SRC} (trim + 5% padding)..."
   rm -rf "$ICON_WORK_DIR" && mkdir -p "$ICONSET_DIR"
   # Use ImageMagick if available to trim transparent margins and add ~5% padding.
-  if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
-    if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
+  if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1 || command -v identify >/dev/null 2>&1; then
+    # Choose ImageMagick entrypoint
+    if command -v magick >/dev/null 2>&1; then IM_CONVERT=(magick); IM_IDENTIFY=(magick identify);
+    else IM_CONVERT=(convert); IM_IDENTIFY=(identify); fi
     # Trim transparent edges
-    $IM "$ICON_SRC" -alpha on -trim +repage "${ICON_WORK_DIR}/trimmed.png"
-    # Measure trimmed size
-    if command -v identify >/dev/null 2>&1; then
-      read W H < <(identify -format "%w %h" "${ICON_WORK_DIR}/trimmed.png")
-    else
-      read W H < <($IM identify -format "%w %h" "${ICON_WORK_DIR}/trimmed.png")
-    fi
+    "${IM_CONVERT[@]}" "$ICON_SRC" -alpha on -trim +repage "${ICON_WORK_DIR}/trimmed.png" || true
+    # Measure trimmed size without aborting
+    DIMS=$("${IM_IDENTIFY[@]}" -format "%w %h" "${ICON_WORK_DIR}/trimmed.png" 2>/dev/null || true)
+    W=$(echo "$DIMS" | awk '{print $1}'); H=$(echo "$DIMS" | awk '{print $2}')
     if [[ -z "$W" || -z "$H" ]]; then W=1024; H=1024; fi
     if (( W > H )); then SIDE=$W; else SIDE=$H; fi
     PAD_SIDE=$(( (SIDE * 105 + 99) / 100 ))
     # Center on transparent square canvas, then add ~5% padding
-    $IM "${ICON_WORK_DIR}/trimmed.png" -background none -gravity center -extent ${SIDE}x${SIDE} -extent ${PAD_SIDE}x${PAD_SIDE} "$ICON_PROCESSED"
+    "${IM_CONVERT[@]}" "${ICON_WORK_DIR}/trimmed.png" -background none -gravity center -extent ${SIDE}x${SIDE} -extent ${PAD_SIDE}x${PAD_SIDE} "$ICON_PROCESSED" || cp -f "${ICON_WORK_DIR}/trimmed.png" "$ICON_PROCESSED"
   else
     echo "[package] ImageMagick not found; using raw icon without trimming."
     cp -f "$ICON_SRC" "$ICON_PROCESSED"
