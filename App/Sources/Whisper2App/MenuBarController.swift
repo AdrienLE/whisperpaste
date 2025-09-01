@@ -472,6 +472,14 @@ final class MenuBarController: NSObject {
     }
 
     private static func loadStatusIcon() -> NSImage? {
+        // Highest priority: explicit dev-run path
+        let env = ProcessInfo.processInfo.environment
+        if let customPath = env["WP_STATUS_ICON_PATH"], !customPath.isEmpty,
+           FileManager.default.fileExists(atPath: customPath),
+           let img = NSImage(contentsOfFile: customPath) {
+            img.isTemplate = true
+            return img
+        }
         if let named = NSImage(named: "statusIconTemplate") { return named }
         if let path = Bundle.main.path(forResource: "statusIconTemplate", ofType: "png") {
             return NSImage(contentsOfFile: path)
