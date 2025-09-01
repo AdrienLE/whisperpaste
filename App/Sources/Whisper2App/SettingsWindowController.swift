@@ -22,7 +22,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
                               styleMask: [.titled, .closable],
                               backing: .buffered, defer: false)
-        window.title = "Whisper2 Settings"
+        window.title = "WhisperPaste Settings"
         super.init(window: window)
         window.delegate = self
         setupUI()

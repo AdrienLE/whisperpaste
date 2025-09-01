@@ -21,7 +21,7 @@ final class MenuBarController: NSObject {
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            if let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Whisper2") {
+            if let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "WhisperPaste") {
                 img.isTemplate = true
                 button.image = img
             } else {
@@ -150,7 +150,10 @@ final class MenuBarController: NSObject {
             guard let self = self else { return }
             // Prepare audio: convert to m4a (AAC) for API compatibility/size
             let convertStart = Date()
-            let (preparedURL, exportError) = self.prepareAudioForUploadDetailed(originalURL: audioURL)
+            var (preparedURL, exportError) = self.encodeToM4ALowBitrate(originalURL: audioURL)
+            if preparedURL == nil {
+                (preparedURL, exportError) = self.prepareAudioForUploadDetailed(originalURL: audioURL)
+            }
             let convertDuration = Date().timeIntervalSince(convertStart)
             if let u = preparedURL {
                 NSLog("Pipeline: Conversion to m4a took %.2fs (file=\(u.lastPathComponent))", convertDuration)
@@ -310,6 +313,61 @@ final class MenuBarController: NSObject {
             return (nil, errDetails.isEmpty ? "Unknown export error" : errDetails)
         default:
             return (nil, "Export ended with status=\(export.status.rawValue)")
+        }
+    }
+
+    // High compression AAC encoder to reduce upload size for speech (mono, ~48kbps, 22.05kHz)
+    private func encodeToM4ALowBitrate(originalURL: URL, sampleRate: Double = 22050, bitrate: Int = 48000) -> (URL?, String?) {
+        if originalURL.pathExtension.lowercased() == "m4a" { return (originalURL, nil) }
+        let asset = AVAsset(url: originalURL)
+        guard let track = asset.tracks(withMediaType: .audio).first else {
+            return (nil, "No audio track in asset")
+        }
+        let readerSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsNonInterleaved: false
+        ]
+        let writerSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: sampleRate,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: bitrate
+        ]
+        let outURL = originalURL.deletingPathExtension().appendingPathExtension("m4a")
+        try? FileManager.default.removeItem(at: outURL)
+        do {
+            let reader = try AVAssetReader(asset: asset)
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: readerSettings)
+            if reader.canAdd(output) { reader.add(output) } else { return (nil, "Cannot add reader output") }
+            let writer = try AVAssetWriter(outputURL: outURL, fileType: .m4a)
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: writerSettings)
+            input.expectsMediaDataInRealTime = false
+            if writer.canAdd(input) { writer.add(input) } else { return (nil, "Cannot add writer input") }
+            guard writer.startWriting() else { return (nil, writer.error?.localizedDescription ?? "Writer start failed") }
+            guard reader.startReading() else { return (nil, reader.error?.localizedDescription ?? "Reader start failed") }
+            writer.startSession(atSourceTime: .zero)
+            let queue = DispatchQueue(label: "encode.m4a.lowbitrate")
+            let sem = DispatchSemaphore(value: 0)
+            input.requestMediaDataWhenReady(on: queue) {
+                while input.isReadyForMoreMediaData {
+                    if let sample = output.copyNextSampleBuffer() {
+                        if !input.append(sample) {
+                            reader.cancelReading(); input.markAsFinished(); sem.signal(); return
+                        }
+                    } else {
+                        input.markAsFinished(); sem.signal(); break
+                    }
+                }
+            }
+            sem.wait()
+            writer.finishWriting {}
+            if writer.status == .completed { return (outURL, nil) }
+            let err = writer.error?.localizedDescription ?? reader.error?.localizedDescription ?? "Unknown encode error"
+            return (nil, err)
+        } catch {
+            return (nil, error.localizedDescription)
         }
     }
     private func prepareAudioForUpload(originalURL: URL) -> URL? {

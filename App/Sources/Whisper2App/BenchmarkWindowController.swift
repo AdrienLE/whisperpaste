@@ -185,27 +185,44 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
     // Convert sample to m4a for upload
     private func convertToM4A(_ url: URL) -> (URL?, String?) {
         if url.pathExtension.lowercased() == "m4a" { return (url, nil) }
+        let asset = AVAsset(url: url)
+        guard let track = asset.tracks(withMediaType: .audio).first else { return (nil, "No audio track") }
         let out = url.deletingPathExtension().appendingPathExtension("m4a")
         try? FileManager.default.removeItem(at: out)
-        let asset = AVURLAsset(url: url)
-        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
-            return (nil, "AVAssetExportSession unavailable")
-        }
-        export.outputURL = out; export.outputFileType = .m4a
-        let sem = DispatchSemaphore(value: 0)
-        export.exportAsynchronously { sem.signal() }
-        sem.wait()
-        switch export.status {
-        case .completed: return (out, nil)
-        case .failed, .cancelled:
-            let err = export.error as NSError?
-            let underlying = (err?.userInfo[NSUnderlyingErrorKey] as? NSError)?.localizedDescription
-            let reason = err?.localizedFailureReason
-            let suggestion = err?.localizedRecoverySuggestion
-            let details = [err?.localizedDescription, reason, suggestion, underlying].compactMap { $0 }.joined(separator: " | ")
-            return (nil, details.isEmpty ? "Unknown export error" : details)
-        default: return (nil, "Export status=\(export.status.rawValue)")
-        }
+        let readerSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsNonInterleaved: false
+        ]
+        let writerSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 22050,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 48000
+        ]
+        do {
+            let reader = try AVAssetReader(asset: asset)
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: readerSettings)
+            if reader.canAdd(output) { reader.add(output) } else { return (nil, "Cannot add reader output") }
+            let writer = try AVAssetWriter(outputURL: out, fileType: .m4a)
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: writerSettings)
+            if writer.canAdd(input) { writer.add(input) } else { return (nil, "Cannot add writer input") }
+            guard writer.startWriting() else { return (nil, writer.error?.localizedDescription ?? "Writer start failed") }
+            guard reader.startReading() else { return (nil, reader.error?.localizedDescription ?? "Reader start failed") }
+            writer.startSession(atSourceTime: .zero)
+            let sem = DispatchSemaphore(value: 0)
+            let q = DispatchQueue(label: "benchmark.encode.m4a")
+            input.requestMediaDataWhenReady(on: q) {
+                while input.isReadyForMoreMediaData {
+                    if let sample = output.copyNextSampleBuffer() {
+                        if !input.append(sample) { reader.cancelReading(); input.markAsFinished(); sem.signal(); return }
+                    } else { input.markAsFinished(); sem.signal(); break }
+                }
+            }
+            sem.wait(); writer.finishWriting {}
+            return writer.status == .completed ? (out, nil) : (nil, writer.error?.localizedDescription ?? reader.error?.localizedDescription ?? "Unknown encode error")
+        } catch { return (nil, error.localizedDescription) }
     }
 
     // MARK: - Table

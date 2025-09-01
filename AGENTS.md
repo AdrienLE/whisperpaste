@@ -11,7 +11,7 @@ Coding Guidelines
 - Keep the macOS focus; prefer native frameworks (AppKit/AVFoundation/Speech) where practical.
 - Separate core logic (`Whisper2Core`) from UI; make the core testable.
 - Defer network calls and external services behind protocol abstractions so they can be mocked in tests.
-- Persist user settings/history under `~/Library/Application Support/whisper2/`.
+- Persist user settings/history under `~/Library/Application Support/whisperpaste/` (reads legacy `whisper2/` if present for migration).
 
 Commit Triggers
 - Modify `PLAN.md` to reflect current step and rationale.

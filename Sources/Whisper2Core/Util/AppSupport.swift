@@ -1,7 +1,8 @@
 import Foundation
 
 public enum AppSupportPaths {
-    public static let bundleIdentifier = "whisper2"
+    // New brand folder; we keep backward compatibility with legacy folder
+    public static let bundleIdentifier = "whisperpaste"
 
     public static func appSupportDirectory(base: URL? = nil) throws -> URL {
         if let base = base { return base }
@@ -9,11 +10,17 @@ public enum AppSupportPaths {
         guard let root = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw NSError(domain: "AppSupportPaths", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to locate Application Support directory"])
         }
-        let dir = root.appendingPathComponent(bundleIdentifier, isDirectory: true)
-        if !fm.fileExists(atPath: dir.path) {
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let newDir = root.appendingPathComponent(bundleIdentifier, isDirectory: true)
+        let legacyDir = root.appendingPathComponent("whisper2", isDirectory: true)
+        // Prefer new dir; if it doesn't exist but legacy exists, keep using legacy to avoid data loss
+        if fm.fileExists(atPath: newDir.path) {
+            return newDir
+        } else if fm.fileExists(atPath: legacyDir.path) {
+            return legacyDir
+        } else {
+            try fm.createDirectory(at: newDir, withIntermediateDirectories: true)
+            return newDir
         }
-        return dir
     }
 
     public static func settingsFile(base: URL? = nil) throws -> URL {

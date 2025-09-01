@@ -15,7 +15,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 360),
                               styleMask: [.titled, .closable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = "Whisper2 History"
+        window.title = "WhisperPaste History"
         super.init(window: window)
         setupUI()
         reload()
