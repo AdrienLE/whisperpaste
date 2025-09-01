@@ -12,6 +12,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let playBtn = NSButton(title: "Play", target: nil, action: nil)
     private let revealBtn = NSButton(title: "Reveal in Finder", target: nil, action: nil)
     private let cleanBtn = NSButton(title: "Remove Missing Audio", target: nil, action: nil)
+    private let clearAudioBtn = NSButton(title: "Clear All Audio", target: nil, action: nil)
+    private let clearHistoryBtn = NSButton(title: "Clear History", target: nil, action: nil)
 
     init(historyStore: HistoryStore) {
         self.historyStore = historyStore
@@ -72,12 +74,21 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         cleanBtn.target = self
         cleanBtn.action = #selector(cleanMissing)
         cleanBtn.toolTip = "Remove history entries whose audio file is missing"
+        clearAudioBtn.target = self
+        clearAudioBtn.action = #selector(clearAllAudio)
+        clearAudioBtn.toolTip = "Delete audio files from all entries but keep text"
+        clearHistoryBtn.target = self
+        clearHistoryBtn.action = #selector(clearHistory)
+        clearHistoryBtn.toolTip = "Remove all history entries (text and audio)"
+
         let buttons = NSStackView(views: [
             NSButton(title: "Copy Raw", target: self, action: #selector(copyRaw)),
             NSButton(title: "Copy Cleaned", target: self, action: #selector(copyCleaned)),
             playBtn,
             revealBtn,
             cleanBtn,
+            clearAudioBtn,
+            clearHistoryBtn,
             NSButton(title: "Refresh", target: self, action: #selector(refresh))
         ])
         buttons.orientation = .horizontal
@@ -187,5 +198,53 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         let hasAudio = (selectedAudioPath() != nil)
         playBtn.isEnabled = hasAudio
         revealBtn.isEnabled = hasAudio
+    }
+
+    // MARK: - Bulk actions
+    @objc private func clearHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear all history?"
+        alert.informativeText = "This will remove all entries (text and audio references)."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            try? historyStore.clearAll()
+            reload()
+        }
+    }
+
+    @objc private func clearAllAudio() {
+        let alert = NSAlert()
+        alert.messageText = "Clear all audio files?"
+        alert.informativeText = "This will delete audio files on disk and keep the text history."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete Audio")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            try? historyStore.clearAllAudioReferences(deleteFiles: true)
+            reload()
+        }
+    }
+
+    // MARK: - Delete single
+    @objc private func keyDown(with event: NSEvent) {
+        if event.keyCode == 51 { // delete key
+            deleteSelected()
+        }
+    }
+
+    @objc private func deleteSelected() {
+        var row = table.selectedRow
+        guard row >= 0 else { NSSound.beep(); return }
+        let alert = NSAlert()
+        alert.messageText = "Delete selected entry?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            try? historyStore.delete(at: row)
+            reload()
+        }
     }
 }

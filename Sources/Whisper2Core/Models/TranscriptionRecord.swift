@@ -61,4 +61,26 @@ public final class HistoryStore {
             try save(kept)
         }
     }
+
+    public func clearAll() throws {
+        try save([])
+    }
+
+    public func delete(at index: Int) throws {
+        var items = load()
+        guard index >= 0 && index < items.count else { return }
+        items.remove(at: index)
+        try save(items)
+    }
+
+    public func clearAllAudioReferences(deleteFiles: Bool = true) throws {
+        var items = load()
+        for i in 0..<items.count {
+            if let path = items[i].audioFilePath {
+                if deleteFiles && fm.fileExists(atPath: path) { try? fm.removeItem(atPath: path) }
+                items[i].audioFilePath = nil
+            }
+        }
+        try save(items)
+    }
 }
