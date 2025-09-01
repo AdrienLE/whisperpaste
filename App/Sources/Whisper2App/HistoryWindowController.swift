@@ -10,6 +10,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let table = NSTableView()
     private let scroll = NSScrollView()
     private let playBtn = NSButton(title: "Play", target: nil, action: nil)
+    private let revealBtn = NSButton(title: "Reveal in Finder", target: nil, action: nil)
+    private let cleanBtn = NSButton(title: "Remove Missing Audio", target: nil, action: nil)
 
     init(historyStore: HistoryStore) {
         self.historyStore = historyStore
@@ -63,12 +65,19 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         content.addSubview(scroll)
         playBtn.target = self
         playBtn.action = #selector(playAudio)
+        playBtn.toolTip = "Play the selected entry's audio file"
+        revealBtn.target = self
+        revealBtn.action = #selector(revealAudio)
+        revealBtn.toolTip = "Reveal the selected entry's audio file in Finder"
+        cleanBtn.target = self
+        cleanBtn.action = #selector(cleanMissing)
+        cleanBtn.toolTip = "Remove history entries whose audio file is missing"
         let buttons = NSStackView(views: [
             NSButton(title: "Copy Raw", target: self, action: #selector(copyRaw)),
             NSButton(title: "Copy Cleaned", target: self, action: #selector(copyCleaned)),
             playBtn,
-            NSButton(title: "Reveal", target: self, action: #selector(revealAudio)),
-            NSButton(title: "Clean Missing", target: self, action: #selector(cleanMissing)),
+            revealBtn,
+            cleanBtn,
             NSButton(title: "Refresh", target: self, action: #selector(refresh))
         ])
         buttons.orientation = .horizontal
@@ -130,7 +139,17 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     @objc private func copyRaw() { copy(column: \.rawText) }
     @objc private func copyCleaned() { copy(column: \.cleanedText) }
     @objc private func refresh() { reload() }
-    @objc private func cleanMissing() { try? historyStore.cleanMissingAudioReferences(); reload() }
+    @objc private func cleanMissing() {
+        let alert = NSAlert()
+        alert.messageText = "Remove entries with missing audio?"
+        alert.informativeText = "This will remove any history items whose audio file cannot be found on disk."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            try? historyStore.cleanMissingAudioReferences(); reload()
+        }
+    }
     @objc private func playAudio() {
         guard let path = selectedAudioPath() else { NSSound.beep(); return }
         do {
@@ -165,6 +184,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     private func updateButtonsForSelection() {
-        playBtn.isEnabled = (selectedAudioPath() != nil)
+        let hasAudio = (selectedAudioPath() != nil)
+        playBtn.isEnabled = hasAudio
+        revealBtn.isEnabled = hasAudio
     }
 }
