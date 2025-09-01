@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 cd "$(dirname "$0")/.."
 OS="$(uname -s)"
 if [[ "$OS" != "Darwin" ]]; then
@@ -27,6 +28,7 @@ if [[ -f "$ICON_SRC" ]]; then
     # 0% padding: center on tight square canvas only (no extra extent)
     # Tight square, grayscale, make near-white transparent; thicken at full res, then downscale crisply and sharpen
     DILATE_KERNEL="${WP_TRAY_DILATE:-Octagon:7}"
+    echo "[run] Tray thickness kernel: ${DILATE_KERNEL}"
     "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 18x18 "$STATUS_ICON" || true
   else
     # Fallback: basic resize; template rendering by macOS will tint it

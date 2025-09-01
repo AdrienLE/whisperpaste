@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Ensure Homebrew binaries (e.g., ImageMagick) are on PATH in non-interactive shells
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 cd "$(dirname "$0")/.."
 
 APP_NAME="WhisperPaste"
@@ -66,6 +68,7 @@ if [[ -f "$ICON_SRC" ]]; then
     if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
     # Convert to grayscale, make near-white transparent, thicken at full res, then downscale
     DILATE_KERNEL="${WP_TRAY_DILATE:-Octagon:7}"
+    echo "[package] Tray thickness kernel: ${DILATE_KERNEL}"
     $IM "$ICON_PROCESSED" -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 18x18 "$STATUS_OUT1" >/dev/null 2>&1 || true
     $IM "$ICON_PROCESSED" -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 36x36 "$STATUS_OUT2" >/dev/null 2>&1 || true
   else
