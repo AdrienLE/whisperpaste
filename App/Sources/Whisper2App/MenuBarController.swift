@@ -21,11 +21,14 @@ final class MenuBarController: NSObject {
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            if let img = NSImage(systemSymbolName: "waveform", accessibilityDescription: "WhisperPaste") {
+            if let img = Self.loadStatusIcon() {
                 img.isTemplate = true
                 button.image = img
+            } else if let sf = NSImage(systemSymbolName: "waveform", accessibilityDescription: "WhisperPaste") {
+                sf.isTemplate = true
+                button.image = sf
             } else {
-                button.title = "W2"
+                button.title = "WP"
             }
             button.action = #selector(statusItemClicked(_:))
             button.target = self
@@ -453,13 +456,27 @@ final class MenuBarController: NSObject {
 
     private func setRecordingIcon(_ recording: Bool) {
         guard let button = statusItem.button else { return }
-        let name = recording ? "record.circle" : "waveform"
-        if let img = NSImage(systemSymbolName: name, accessibilityDescription: "Whisper2") {
-            img.isTemplate = true
-            button.image = img
+        if recording {
+            if let img = NSImage(systemSymbolName: "record.circle", accessibilityDescription: "WhisperPaste Recording") {
+                img.isTemplate = true
+                button.image = img
+            } else { button.title = "●" }
         } else {
-            button.title = recording ? "●" : "W2"
+            if let img = Self.loadStatusIcon() {
+                img.isTemplate = true
+                button.image = img
+            } else if let sf = NSImage(systemSymbolName: "waveform", accessibilityDescription: "WhisperPaste") {
+                sf.isTemplate = true; button.image = sf
+            } else { button.title = "WP" }
         }
+    }
+
+    private static func loadStatusIcon() -> NSImage? {
+        if let named = NSImage(named: "statusIconTemplate") { return named }
+        if let path = Bundle.main.path(forResource: "statusIconTemplate", ofType: "png") {
+            return NSImage(contentsOfFile: path)
+        }
+        return nil
     }
 
     private func registerHotkey(from string: String) {
