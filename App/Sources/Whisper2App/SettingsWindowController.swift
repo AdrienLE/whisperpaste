@@ -9,10 +9,16 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let apiKeyField = PasteCapableSecureTextField()
     private let transcriptionPopup = NSPopUpButton()
     private let cleanupPopup = NSPopUpButton()
+    private let transcriptionPromptEditor = MultilineTextEditor(editable: true)
     private let promptEditor = MultilineTextEditor(editable: true)
     private let keepAudioCheckbox = NSButton(checkboxWithTitle: "Keep audio files", target: nil, action: nil)
     private let hotkeyField = NSTextField()
     private let showAllModelsCheckbox = NSButton(checkboxWithTitle: "Show all models", target: nil, action: nil)
+    private let useCleanupCheckbox = NSButton(checkboxWithTitle: "Enable cleanup (chat model)", target: nil, action: nil)
+
+    // Rows we toggle visibility on
+    private var cleanupModelRow: NSView?
+    private var cleanupPromptRow: NSView?
 
     var onSaved: ((Settings) -> Void)?
 
@@ -49,6 +55,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let rows: [NSView] = [
             makeRow(title: "OpenAI API Key:", field: apiKeyField),
             modelsRow(),
+            makeTranscriptionPromptRow(),
+            useCleanupCheckbox,
             showAllModelsCheckbox,
             makePromptRow(),
             makeRow(title: "Hotkey:", field: hotkeyRecorder),
@@ -99,8 +107,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         transcriptionPopup.removeAllItems()
         cleanupPopup.removeAllItems()
 
+        transcriptionPromptEditor.translatesAutoresizingMaskIntoConstraints = false
+        transcriptionPromptEditor.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        transcriptionPromptEditor.onChange = { [weak self] text in self?.settings.transcriptionPrompt = text }
+
         promptEditor.translatesAutoresizingMaskIntoConstraints = false
-        promptEditor.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        promptEditor.heightAnchor.constraint(equalToConstant: 120).isActive = true
         promptEditor.onChange = { [weak self] text in self?.settings.cleanupPrompt = text }
 
         hotkeyField.placeholderString = "ctrl+shift+space"
@@ -108,6 +120,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         showAllModelsCheckbox.target = self
         showAllModelsCheckbox.action = #selector(toggleShowAllModels)
+
+        useCleanupCheckbox.target = self
+        useCleanupCheckbox.action = #selector(toggleUseCleanup)
     }
 
     private func makeRow(title: String, field: NSView) -> NSView {
@@ -136,11 +151,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         row.translatesAutoresizingMaskIntoConstraints = false
         label.widthAnchor.constraint(equalToConstant: 160).isActive = true
         promptEditor.translatesAutoresizingMaskIntoConstraints = false
-        promptEditor.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        promptEditor.heightAnchor.constraint(equalToConstant: 120).isActive = true
         // Ensure the editor expands and has a sensible minimum width
         promptEditor.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
         promptEditor.setContentHuggingPriority(.defaultLow, for: .horizontal)
         promptEditor.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        cleanupPromptRow = row
+        return row
+    }
+
+    private func makeTranscriptionPromptRow() -> NSView {
+        let label = NSTextField(labelWithString: "Transcription Prompt:")
+        label.alignment = .right
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let row = NSStackView(views: [label, transcriptionPromptEditor])
+        row.orientation = .horizontal
+        row.alignment = .top
+        row.spacing = 12
+        row.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(equalToConstant: 160).isActive = true
+        transcriptionPromptEditor.translatesAutoresizingMaskIntoConstraints = false
+        transcriptionPromptEditor.heightAnchor.constraint(equalToConstant: 120).isActive = true
+        transcriptionPromptEditor.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        transcriptionPromptEditor.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        transcriptionPromptEditor.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return row
     }
 
@@ -158,6 +192,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let row2 = makeRow(title: "Cleanup Model:", field: cleanupPopup)
         h.addArrangedSubview(row1)
         h.addArrangedSubview(row2)
+        cleanupModelRow = row2
         return h
     }
 
@@ -180,17 +215,22 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         if cleanupPopup.itemTitles.isEmpty { cleanupPopup.addItems(withTitles: ["Loading models…"]) }
         cleanupPopup.selectItem(withTitle: settings.cleanupModel)
         promptEditor.string = settings.cleanupPrompt
+        transcriptionPromptEditor.string = settings.transcriptionPrompt
+        useCleanupCheckbox.state = settings.useCleanup ? .on : .off
         keepAudioCheckbox.state = settings.keepAudioFiles ? .on : .off
         hotkeyField.stringValue = settings.hotkey
         hotkeyRecorder.hotkeyString = settings.hotkey
         showAllModelsCheckbox.state = settings.showAllModels ? .on : .off
+        applyUseCleanupVisibility()
     }
 
     @objc private func saveTapped() {
         settings.openAIKey = apiKeyField.stringValue.isEmpty ? nil : apiKeyField.stringValue
         settings.transcriptionModel = transcriptionPopup.titleOfSelectedItem ?? settings.transcriptionModel
         settings.cleanupModel = cleanupPopup.titleOfSelectedItem ?? settings.cleanupModel
+        settings.transcriptionPrompt = transcriptionPromptEditor.string
         settings.cleanupPrompt = promptEditor.string
+        settings.useCleanup = (useCleanupCheckbox.state == .on)
         settings.keepAudioFiles = (keepAudioCheckbox.state == .on)
         settings.hotkey = hotkeyField.stringValue
         settings.showAllModels = (showAllModelsCheckbox.state == .on)
@@ -296,5 +336,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // Keep current selections if possible
         transcriptionPopup.selectItem(withTitle: settings.transcriptionModel)
         cleanupPopup.selectItem(withTitle: settings.cleanupModel)
+    }
+
+    @objc private func toggleUseCleanup() {
+        settings.useCleanup = (useCleanupCheckbox.state == .on)
+        applyUseCleanupVisibility()
+    }
+
+    private func applyUseCleanupVisibility() {
+        let show = (useCleanupCheckbox.state == .on)
+        cleanupPopup.isHidden = !show
+        cleanupModelRow?.isHidden = !show
+        cleanupPromptRow?.isHidden = !show
     }
 }

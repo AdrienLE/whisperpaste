@@ -6,7 +6,7 @@ public struct OpenAIModels {
 }
 
 public protocol TranscriptionService {
-    func transcribe(apiKey: String, audioFileURL: URL, model: String) throws -> String
+    func transcribe(apiKey: String, audioFileURL: URL, model: String, prompt: String?) throws -> String
 }
 
 public protocol CleanupService {
@@ -36,14 +36,16 @@ public final class OpenAIClient: TranscriptionService, CleanupService {
         }
     }
 
-    public func transcribe(apiKey: String, audioFileURL: URL, model: String) throws -> String {
+    public func transcribe(apiKey: String, audioFileURL: URL, model: String, prompt: String? = nil) throws -> String {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let mime = Self.mimeType(for: audioFileURL)
-        req.httpBody = try Self.multipartBody(boundary: boundary, params: ["model": model], fileURL: audioFileURL, fileParam: "file", filename: audioFileURL.lastPathComponent, mime: mime)
+        var params: [String: String] = ["model": model]
+        if let p = prompt, !p.isEmpty { params["prompt"] = p }
+        req.httpBody = try Self.multipartBody(boundary: boundary, params: params, fileURL: audioFileURL, fileParam: "file", filename: audioFileURL.lastPathComponent, mime: mime)
         let (data, resp) = try syncRequest(req)
         guard let http = resp as? HTTPURLResponse else { throw ClientError.invalidResponse }
         if !(200..<300).contains(http.statusCode) {

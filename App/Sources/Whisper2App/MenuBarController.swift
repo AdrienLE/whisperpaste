@@ -180,7 +180,7 @@ final class MenuBarController: NSObject {
                 let fileSize = (try? FileManager.default.attributesOfItem(atPath: uploadURL.path)[.size] as? NSNumber)?.intValue ?? -1
                 NSLog("Pipeline: Transcribing with model=\(settings.transcriptionModel), file=\(uploadURL.lastPathComponent), size=\(fileSize) bytes")
                 let t0 = Date()
-                let raw = try client.transcribe(apiKey: key, audioFileURL: uploadURL, model: settings.transcriptionModel)
+                let raw = try client.transcribe(apiKey: key, audioFileURL: uploadURL, model: settings.transcriptionModel, prompt: settings.transcriptionPrompt)
                 let tDur = Date().timeIntervalSince(t0)
                 NSLog("Pipeline: Transcribe duration %.2fs", tDur)
                 rawResult = .success(raw)
@@ -217,52 +217,67 @@ final class MenuBarController: NSObject {
                 return
             case .success(let raw):
                 NSLog("Pipeline: Raw length=\(raw.count) chars")
-                DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
-                // Stage 2: Cleanup
-                let cleanResult: Result<String, Error>
-                do {
-                    NSLog("Pipeline: Cleaning with model=\(settings.cleanupModel)")
-                    let c0 = Date()
-                    let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
-                    let cDur = Date().timeIntervalSince(c0)
-                    NSLog("Pipeline: Cleanup duration %.2fs", cDur)
-                    cleanResult = .success(cleaned)
-                } catch {
-                    NSLog("Pipeline: Cleanup error: \(error.localizedDescription)")
-                    cleanResult = .failure(error)
-                }
-                switch cleanResult {
-                case .success(let cleaned):
-                    NSLog("Pipeline: Cleaned length=\(cleaned.count) chars")
-                    DispatchQueue.main.async {
-                        self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "openai")
-                        if !settings.keepAudioFiles {
-                            try? FileManager.default.removeItem(at: audioURL)
-                            if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
-                        } else if uploadURL != audioURL {
-                            // Prefer keeping the compressed file; remove raw to save space
-                            try? FileManager.default.removeItem(at: audioURL)
-                        }
-                        let total = Date().timeIntervalSince(pipelineStart)
-                        NSLog("Pipeline: Total duration %.2fs", total)
-                        self.previewVC.showFinalText(cleaned)
+                if settings.useCleanup {
+                    DispatchQueue.main.async { self.previewVC.setState(.cleaning) }
+                    // Stage 2: Cleanup
+                    let cleanResult: Result<String, Error>
+                    do {
+                        NSLog("Pipeline: Cleaning with model=\(settings.cleanupModel)")
+                        let c0 = Date()
+                        let cleaned = try client.cleanup(apiKey: key, text: raw, prompt: settings.cleanupPrompt, model: settings.cleanupModel)
+                        let cDur = Date().timeIntervalSince(c0)
+                        NSLog("Pipeline: Cleanup duration %.2fs", cDur)
+                        cleanResult = .success(cleaned)
+                    } catch {
+                        NSLog("Pipeline: Cleanup error: \(error.localizedDescription)")
+                        cleanResult = .failure(error)
                     }
-                case .failure(let error):
-                    let details = (error as NSError).localizedDescription
+                    switch cleanResult {
+                    case .success(let cleaned):
+                        NSLog("Pipeline: Cleaned length=\(cleaned.count) chars")
+                        DispatchQueue.main.async {
+                            self.finalizeRecord(raw: raw, cleaned: cleaned, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "openai")
+                            if !settings.keepAudioFiles {
+                                try? FileManager.default.removeItem(at: audioURL)
+                                if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
+                            } else if uploadURL != audioURL {
+                                // Prefer keeping the compressed file; remove raw to save space
+                                try? FileManager.default.removeItem(at: audioURL)
+                            }
+                            let total = Date().timeIntervalSince(pipelineStart)
+                            NSLog("Pipeline: Total duration %.2fs", total)
+                            self.previewVC.showFinalText(cleaned)
+                        }
+                    case .failure(let error):
+                        let details = (error as NSError).localizedDescription
+                        DispatchQueue.main.async {
+                            let msg = "Cleanup failed. Copied transcribed text."
+                            self.previewVC.setErrorDetails(details)
+                            self.previewVC.setState(.error(msg))
+                            self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "error", resetUI: false)
+                            let alert = NSAlert()
+                            alert.messageText = "Cleanup Failed"
+                            alert.informativeText = details
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                            self.previewVC.showFinalText(raw)
+                            self.previewVC.setState(.idle)
+                            self.setRecordingIcon(false)
+                            if !settings.keepAudioFiles {
+                                try? FileManager.default.removeItem(at: audioURL)
+                                if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
+                            } else if uploadURL != audioURL {
+                                try? FileManager.default.removeItem(at: audioURL)
+                            }
+                            let total = Date().timeIntervalSince(pipelineStart)
+                            NSLog("Pipeline: Total duration %.2fs", total)
+                        }
+                    }
+                } else {
+                    // No cleanup: finalize with transcribed text
                     DispatchQueue.main.async {
-                        let msg = "Cleanup failed. Copied transcribed text."
-                        self.previewVC.setErrorDetails(details)
-                        self.previewVC.setState(.error(msg))
-                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "error", resetUI: false)
-                        let alert = NSAlert()
-                        alert.messageText = "Cleanup Failed"
-                        alert.informativeText = details
-                        alert.alertStyle = .warning
-                        alert.addButton(withTitle: "OK")
-                        alert.runModal()
-                        self.previewVC.showFinalText(raw)
-                        self.previewVC.setState(.idle)
-                        self.setRecordingIcon(false)
+                        self.finalizeRecord(raw: raw, cleaned: raw, audioURL: settings.keepAudioFiles ? uploadURL : nil, source: "openai")
                         if !settings.keepAudioFiles {
                             try? FileManager.default.removeItem(at: audioURL)
                             if uploadURL != audioURL { try? FileManager.default.removeItem(at: uploadURL) }
@@ -271,6 +286,7 @@ final class MenuBarController: NSObject {
                         }
                         let total = Date().timeIntervalSince(pipelineStart)
                         NSLog("Pipeline: Total duration %.2fs", total)
+                        self.previewVC.showFinalText(raw)
                     }
                 }
             }
