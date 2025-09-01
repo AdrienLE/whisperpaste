@@ -24,8 +24,8 @@ if [[ -f "$ICON_SRC" ]]; then
     H=$(echo "$DIMS" | awk '{print $2}')
     [[ -z "$W" || -z "$H" ]] && W=1024 && H=1024
     if (( W > H )); then SIDE=$W; else SIDE=$H; fi
-    PAD_SIDE=$(( (SIDE * 105 + 99) / 100 ))
-    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -extent ${PAD_SIDE}x${PAD_SIDE} -colorspace Gray -resize 18x18 "$STATUS_ICON" || true
+    # 0% padding: center on tight square canvas only (no extra extent)
+    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -resize 18x18 "$STATUS_ICON" || true
   else
     # Fallback: basic grayscale + resize
     sips -s format png -s colorModel Gray -z 18 18 "$ICON_SRC" --out "$STATUS_ICON" >/dev/null || true

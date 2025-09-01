@@ -38,9 +38,8 @@ if [[ -f "$ICON_SRC" ]]; then
     W=$(echo "$DIMS" | awk '{print $1}'); H=$(echo "$DIMS" | awk '{print $2}')
     if [[ -z "$W" || -z "$H" ]]; then W=1024; H=1024; fi
     if (( W > H )); then SIDE=$W; else SIDE=$H; fi
-    PAD_SIDE=$(( (SIDE * 105 + 99) / 100 ))
-    # Center on transparent square canvas, then add ~5% padding
-    "${IM_CONVERT[@]}" "${ICON_WORK_DIR}/trimmed.png" -background none -gravity center -extent ${SIDE}x${SIDE} -extent ${PAD_SIDE}x${PAD_SIDE} "$ICON_PROCESSED" || cp -f "${ICON_WORK_DIR}/trimmed.png" "$ICON_PROCESSED"
+    # 0% padding: center on tight square canvas only (no extra extent)
+    "${IM_CONVERT[@]}" "${ICON_WORK_DIR}/trimmed.png" -background none -gravity center -extent ${SIDE}x${SIDE} "$ICON_PROCESSED" || cp -f "${ICON_WORK_DIR}/trimmed.png" "$ICON_PROCESSED"
   else
     echo "[package] ImageMagick not found; using raw icon without trimming."
     cp -f "$ICON_SRC" "$ICON_PROCESSED"
