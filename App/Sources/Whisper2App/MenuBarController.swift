@@ -139,7 +139,8 @@ final class MenuBarController: NSObject {
             finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: nil, source: "preview")
             return
         }
-        guard let key = settings.openAIKey, !key.isEmpty else {
+        let resolvedKey = Keychain.shared.getOpenAIKey() ?? settings.openAIKey
+        guard let key = resolvedKey, !key.isEmpty else {
             // No API key, use preview text
             NSLog("Pipeline: Missing API key; using live preview text")
             finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "preview")

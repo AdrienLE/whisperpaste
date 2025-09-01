@@ -54,13 +54,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         let rows: [NSView] = [
             makeRow(title: "OpenAI API Key:", field: apiKeyField),
-            modelsRow(),
+            makeRow(title: "Transcription Model:", field: transcriptionPopup),
             makeTranscriptionPromptRow(),
-            useCleanupCheckbox,
-            showAllModelsCheckbox,
-            makePromptRow(),
+            makeRow(title: "Keep audio files", field: keepAudioCheckbox),
             makeRow(title: "Hotkey:", field: hotkeyRecorder),
-            keepAudioCheckbox
+            cleanupSection()
         ]
         let vstack = NSStackView(views: rows)
         vstack.orientation = .vertical
@@ -184,24 +182,30 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         return r
     }()
 
-    private func modelsRow() -> NSView {
-        let h = NSStackView()
-        h.orientation = .vertical
-        h.spacing = 8
-        let row1 = makeRow(title: "Transcription Model:", field: transcriptionPopup)
-        let row2 = makeRow(title: "Cleanup Model:", field: cleanupPopup)
-        h.addArrangedSubview(row1)
-        h.addArrangedSubview(row2)
-        cleanupModelRow = row2
-        return h
+    private func cleanupSection() -> NSView {
+        let box = NSBox()
+        box.title = "Cleanup (chat model)"
+        box.translatesAutoresizingMaskIntoConstraints = false
+        let inner = NSStackView()
+        inner.orientation = .vertical
+        inner.spacing = 8
+        inner.translatesAutoresizingMaskIntoConstraints = false
+        let cleanupModel = makeRow(title: "Cleanup Model:", field: cleanupPopup)
+        cleanupModelRow = cleanupModel
+        inner.addArrangedSubview(useCleanupCheckbox)
+        inner.addArrangedSubview(showAllModelsCheckbox)
+        inner.addArrangedSubview(cleanupModel)
+        inner.addArrangedSubview(makePromptRow())
+        box.contentView = inner
+        return box
     }
 
     private func loadValues() {
-        apiKeyField.stringValue = settings.openAIKey ?? ""
-        // Populate from persisted model lists if present
+        apiKeyField.stringValue = Keychain.shared.getOpenAIKey() ?? settings.openAIKey ?? ""
+        // Populate from persisted model lists if present (transcription list ignores showAll)
         transcriptionPopup.removeAllItems()
         if let models = settings.knownTranscriptionModels, !models.isEmpty {
-            let filtered = Self.filteredModels(models, includeAll: settings.showAllModels)
+            let filtered = Self.filteredModels(models, includeAll: false)
             transcriptionPopup.addItems(withTitles: filtered)
         }
         if transcriptionPopup.itemTitles.isEmpty { transcriptionPopup.addItems(withTitles: ["Loading models…"]) }
@@ -225,7 +229,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func saveTapped() {
-        settings.openAIKey = apiKeyField.stringValue.isEmpty ? nil : apiKeyField.stringValue
+        // Store API key to Keychain; keep JSON empty for security
+        let typedKey = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        Keychain.shared.setOpenAIKey(typedKey.isEmpty ? nil : typedKey)
+        settings.openAIKey = nil
         settings.transcriptionModel = transcriptionPopup.titleOfSelectedItem ?? settings.transcriptionModel
         settings.cleanupModel = cleanupPopup.titleOfSelectedItem ?? settings.cleanupModel
         settings.transcriptionPrompt = transcriptionPromptEditor.string
@@ -254,7 +261,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func refreshModels() {
-        let candidate = apiKeyField.stringValue.isEmpty ? (settings.openAIKey ?? "") : apiKeyField.stringValue
+        let candidate = apiKeyField.stringValue.isEmpty ? (Keychain.shared.getOpenAIKey() ?? settings.openAIKey ?? "") : apiKeyField.stringValue
         guard !candidate.isEmpty else { NSSound.beep(); return }
         let apiKey = candidate
         let client = OpenAIClient()
@@ -272,7 +279,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
                     let showAll = self.settings.showAllModels
                     self.transcriptionPopup.removeAllItems()
-                    self.transcriptionPopup.addItems(withTitles: Self.filteredModels(transcription, includeAll: showAll))
+                    self.transcriptionPopup.addItems(withTitles: Self.filteredModels(transcription, includeAll: false))
                     self.cleanupPopup.removeAllItems()
                     self.cleanupPopup.addItems(withTitles: Self.filteredModels(cleanup, includeAll: showAll))
 
@@ -326,11 +333,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     @objc private func toggleShowAllModels() {
         settings.showAllModels = (showAllModelsCheckbox.state == .on)
-        // Re-apply filtering to current lists without refetching
+        // Re-apply filtering to cleanup list only without refetching
         let trans = settings.knownTranscriptionModels ?? []
         let clean = settings.knownCleanupModels ?? []
         transcriptionPopup.removeAllItems()
-        transcriptionPopup.addItems(withTitles: Self.filteredModels(trans, includeAll: settings.showAllModels))
+        transcriptionPopup.addItems(withTitles: Self.filteredModels(trans, includeAll: false))
         cleanupPopup.removeAllItems()
         cleanupPopup.addItems(withTitles: Self.filteredModels(clean, includeAll: settings.showAllModels))
         // Keep current selections if possible
@@ -348,5 +355,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         cleanupPopup.isHidden = !show
         cleanupModelRow?.isHidden = !show
         cleanupPromptRow?.isHidden = !show
+        showAllModelsCheckbox.isHidden = !show
     }
 }
