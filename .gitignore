@@ -1,6 +1,16 @@
 .build/
+.swiftpm/
+.DS_Store
+.tmp-tests/
+DerivedData/
+dist/
+App/.build/
+App/.swiftpm/
+*.xcworkspace/
+*.xcodeproj/
+*.xcuserdatad/
+
 .DS_Store
 .swiftpm/
 .tmp-tests/
 DerivedData/
-
