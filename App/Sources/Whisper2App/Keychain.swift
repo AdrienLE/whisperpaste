@@ -9,7 +9,7 @@ final class Keychain {
     private let account = "openai_api_key"
 
     func getOpenAIKey() -> String? {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
@@ -46,4 +46,3 @@ final class Keychain {
         return status == errSecSuccess || status == errSecItemNotFound
     }
 }
-

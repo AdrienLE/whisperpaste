@@ -11,14 +11,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let cleanupPopup = NSPopUpButton()
     private let transcriptionPromptEditor = MultilineTextEditor(editable: true)
     private let promptEditor = MultilineTextEditor(editable: true)
-    private let keepAudioCheckbox = NSButton(checkboxWithTitle: "Keep audio files", target: nil, action: nil)
+    private let keepAudioCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let hotkeyField = NSTextField()
     private let showAllModelsCheckbox = NSButton(checkboxWithTitle: "Show all models", target: nil, action: nil)
-    private let useCleanupCheckbox = NSButton(checkboxWithTitle: "Enable cleanup (chat model)", target: nil, action: nil)
+    private let useCleanupCheckbox = NSButton(checkboxWithTitle: "Enable cleanup", target: nil, action: nil)
 
     // Rows we toggle visibility on
     private var cleanupModelRow: NSView?
     private var cleanupPromptRow: NSView?
+    private var showAllModelsRow: NSView?
 
     var onSaved: ((Settings) -> Void)?
 
@@ -26,7 +27,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.settingsStore = settingsStore
         self.settings = settingsStore.load()
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-                              styleMask: [.titled, .closable],
+                              styleMask: [.titled, .closable, .resizable],
                               backing: .buffered, defer: false)
         window.title = "WhisperPaste Settings"
         super.init(window: window)
@@ -52,18 +53,26 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private func setupUI() {
         guard let content = window?.contentView else { return }
 
-        let rows: [NSView] = [
-            makeRow(title: "OpenAI API Key:", field: apiKeyField),
-            makeRow(title: "Transcription Model:", field: transcriptionPopup),
-            makeTranscriptionPromptRow(),
-            makeRow(title: "Keep audio files", field: keepAudioCheckbox),
-            makeRow(title: "Hotkey:", field: hotkeyRecorder),
-            cleanupSection()
-        ]
-        let vstack = NSStackView(views: rows)
+        let vstack = NSStackView()
         vstack.orientation = .vertical
         vstack.spacing = 12
         vstack.translatesAutoresizingMaskIntoConstraints = false
+        vstack.addArrangedSubview(makeRow(title: "OpenAI API Key:", field: apiKeyField))
+        vstack.addArrangedSubview(makeRow(title: "Transcription Model:", field: transcriptionPopup))
+        vstack.addArrangedSubview(makeTranscriptionPromptRow())
+        vstack.addArrangedSubview(makeRow(title: "Keep audio files", field: keepAudioCheckbox))
+        vstack.addArrangedSubview(makeRow(title: "Hotkey:", field: hotkeyRecorder))
+        // Enable cleanup (outside section)
+        vstack.addArrangedSubview(useCleanupCheckbox)
+        let showAllRow = makeRow(title: "Show all models", field: showAllModelsCheckbox)
+        showAllModelsRow = showAllRow
+        vstack.addArrangedSubview(showAllRow)
+        let cmr = makeRow(title: "Cleanup Model:", field: cleanupPopup)
+        cleanupModelRow = cmr
+        vstack.addArrangedSubview(cmr)
+        let cpr = makePromptRow()
+        cleanupPromptRow = cpr
+        vstack.addArrangedSubview(cpr)
 
         // Bottom action bar: Refresh Models, spacer, Cancel, Save
         let refreshButton = NSButton(title: "Refresh Models", target: self, action: #selector(refreshModels))
@@ -182,26 +191,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         return r
     }()
 
-    private func cleanupSection() -> NSView {
-        let box = NSBox()
-        box.title = "Cleanup (chat model)"
-        box.translatesAutoresizingMaskIntoConstraints = false
-        let inner = NSStackView()
-        inner.orientation = .vertical
-        inner.spacing = 8
-        inner.translatesAutoresizingMaskIntoConstraints = false
-        let cleanupModel = makeRow(title: "Cleanup Model:", field: cleanupPopup)
-        cleanupModelRow = cleanupModel
-        inner.addArrangedSubview(useCleanupCheckbox)
-        inner.addArrangedSubview(showAllModelsCheckbox)
-        inner.addArrangedSubview(cleanupModel)
-        inner.addArrangedSubview(makePromptRow())
-        box.contentView = inner
-        return box
-    }
+    // Cleanup container removed in favor of flat rows that we enable/disable
 
     private func loadValues() {
-        apiKeyField.stringValue = Keychain.shared.getOpenAIKey() ?? settings.openAIKey ?? ""
+        apiKeyField.stringValue = Keychain.shared.getOpenAIKey() ?? ""
         // Populate from persisted model lists if present (transcription list ignores showAll)
         transcriptionPopup.removeAllItems()
         if let models = settings.knownTranscriptionModels, !models.isEmpty {
@@ -261,7 +254,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func refreshModels() {
-        let candidate = apiKeyField.stringValue.isEmpty ? (Keychain.shared.getOpenAIKey() ?? settings.openAIKey ?? "") : apiKeyField.stringValue
+        let candidate = apiKeyField.stringValue.isEmpty ? (Keychain.shared.getOpenAIKey() ?? "") : apiKeyField.stringValue
         guard !candidate.isEmpty else { NSSound.beep(); return }
         let apiKey = candidate
         let client = OpenAIClient()
@@ -351,10 +344,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyUseCleanupVisibility() {
-        let show = (useCleanupCheckbox.state == .on)
-        cleanupPopup.isHidden = !show
-        cleanupModelRow?.isHidden = !show
-        cleanupPromptRow?.isHidden = !show
-        showAllModelsCheckbox.isHidden = !show
+        let enabled = (useCleanupCheckbox.state == .on)
+        // Enable/disable controls rather than hiding rows to avoid layout jumps
+        showAllModelsCheckbox.isEnabled = enabled
+        cleanupPopup.isEnabled = enabled
+        promptEditor.textView.isEditable = enabled
+        // Grey out rows when disabled
+        showAllModelsRow?.alphaValue = enabled ? 1.0 : 0.5
+        cleanupModelRow?.alphaValue = enabled ? 1.0 : 0.5
+        cleanupPromptRow?.alphaValue = enabled ? 1.0 : 0.5
     }
 }

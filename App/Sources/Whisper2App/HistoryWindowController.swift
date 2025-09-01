@@ -9,6 +9,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     private let table = NSTableView()
     private let scroll = NSScrollView()
+    private let playBtn = NSButton(title: "Play", target: nil, action: nil)
 
     init(historyStore: HistoryStore) {
         self.historyStore = historyStore
@@ -51,17 +52,21 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         table.addTableColumn(rawCol)
         table.addTableColumn(cleanCol)
         table.usesAlternatingRowBackgroundColors = true
-        table.dataSource = self
+        table.allowsMultipleSelection = false
+        table.allowsEmptySelection = false
         table.delegate = self
+        table.dataSource = self
 
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(scroll)
+        playBtn.target = self
+        playBtn.action = #selector(playAudio)
         let buttons = NSStackView(views: [
             NSButton(title: "Copy Raw", target: self, action: #selector(copyRaw)),
             NSButton(title: "Copy Cleaned", target: self, action: #selector(copyCleaned)),
-            NSButton(title: "Play", target: self, action: #selector(playAudio)),
+            playBtn,
             NSButton(title: "Reveal", target: self, action: #selector(revealAudio)),
             NSButton(title: "Clean Missing", target: self, action: #selector(cleanMissing)),
             NSButton(title: "Refresh", target: self, action: #selector(refresh))
@@ -83,6 +88,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private func reload() {
         items = historyStore.load()
         table.reloadData()
+        // Ensure a single selection by default
+        if !items.isEmpty {
+            table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        }
+        updateButtonsForSelection()
     }
 
     // MARK: - DataSource/Delegate
@@ -148,5 +158,13 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         guard row >= 0, row < items.count else { return nil }
         guard let path = items[row].audioFilePath, FileManager.default.fileExists(atPath: path) else { return nil }
         return path
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        updateButtonsForSelection()
+    }
+
+    private func updateButtonsForSelection() {
+        playBtn.isEnabled = (selectedAudioPath() != nil)
     }
 }
