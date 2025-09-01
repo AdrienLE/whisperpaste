@@ -64,8 +64,9 @@ if [[ -f "$ICON_SRC" ]]; then
   # Generate template status bar icon (18pt and 2x), prefer ImageMagick for grayscale
   if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
     if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
-    $IM "$ICON_PROCESSED" -colorspace Gray -resize 18x18 "$STATUS_OUT1" >/dev/null 2>&1 || true
-    $IM "$ICON_PROCESSED" -colorspace Gray -resize 36x36 "$STATUS_OUT2" >/dev/null 2>&1 || true
+    # Convert to grayscale and make pure white transparent for tray rendering
+    $IM "$ICON_PROCESSED" -colorspace Gray -alpha on -transparent white -resize 18x18 "$STATUS_OUT1" >/dev/null 2>&1 || true
+    $IM "$ICON_PROCESSED" -colorspace Gray -alpha on -transparent white -resize 36x36 "$STATUS_OUT2" >/dev/null 2>&1 || true
   else
     # Fallback: just resize; template rendering by macOS will tint it
     sips -s format png -z 18 18  "$ICON_PROCESSED" --out "$STATUS_OUT1" >/dev/null || true
