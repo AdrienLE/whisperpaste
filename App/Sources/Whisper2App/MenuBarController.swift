@@ -476,6 +476,16 @@ final class MenuBarController: NSObject {
         if let path = Bundle.main.path(forResource: "statusIconTemplate", ofType: "png") {
             return NSImage(contentsOfFile: path)
         }
+        // Dev-run fallback: try project icon.png (repo root) when running via swift run
+        let fm = FileManager.default
+        let cwd = fm.currentDirectoryPath // usually App/ when using scripts/run.sh
+        let candidate = URL(fileURLWithPath: cwd).deletingLastPathComponent().appendingPathComponent("icon.png").path
+        if fm.fileExists(atPath: candidate), let img = NSImage(contentsOfFile: candidate) {
+            img.isTemplate = true // draw as monochrome in status bar
+            // Scale to ~18pt for status item
+            img.size = NSSize(width: 18, height: 18)
+            return img
+        }
         return nil
     }
 
