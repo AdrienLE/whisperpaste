@@ -65,7 +65,7 @@ if [[ -f "$ICON_SRC" ]]; then
   if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1; then
     if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
     # Convert to grayscale, make near-white transparent, thicken at full res, then downscale
-    DILATE_KERNEL="${WP_TRAY_DILATE:-Disk:2}"
+    DILATE_KERNEL="${WP_TRAY_DILATE:-Octagon:7}"
     $IM "$ICON_PROCESSED" -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 18x18 "$STATUS_OUT1" >/dev/null 2>&1 || true
     $IM "$ICON_PROCESSED" -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 36x36 "$STATUS_OUT2" >/dev/null 2>&1 || true
   else
