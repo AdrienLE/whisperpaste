@@ -204,12 +204,33 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             tf.cell?.wraps = false
         }
         tf.stringValue = text
-        cell.addSubview(tf)
+        // Disclosure toggle button to indicate/click expand state
+        let disc = NSButton()
+        disc.isBordered = false
+        disc.bezelStyle = .inline
+        disc.title = ""
+        let rightImg = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Expand")
+        let downImg = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "Collapse")
+        disc.image = isActive ? (downImg ?? NSImage()) : (rightImg ?? NSImage())
+        if disc.image == NSImage() { disc.title = isActive ? "▾" : "▸" }
+        disc.target = self
+        disc.action = #selector(toggleDisclosure(_:))
+        disc.tag = row
+        disc.identifier = NSUserInterfaceItemIdentifier("disc:\(id ?? "")")
+        disc.translatesAutoresizingMaskIntoConstraints = false
+
+        let hstack = NSStackView(views: [disc, tf])
+        hstack.orientation = .horizontal
+        hstack.spacing = 4
+        hstack.alignment = .centerY
+        hstack.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(hstack)
         NSLayoutConstraint.activate([
-            tf.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-            tf.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-            tf.topAnchor.constraint(equalTo: cell.topAnchor, constant: 4),
-            tf.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -4)
+            hstack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+            hstack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+            hstack.topAnchor.constraint(equalTo: cell.topAnchor, constant: 2),
+            hstack.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -2),
+            disc.widthAnchor.constraint(equalToConstant: 10)
         ])
         if isActive {
             DispatchQueue.main.async { [weak tf] in
@@ -296,6 +317,18 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             deleteSelected()
             return
         }
+        if event.keyCode == 53 { // escape closes window
+            self.window?.close(); return
+        }
+        if event.keyCode == 123 { // left arrow: collapse active cell
+            if let active = activeCell {
+                let row = active.row
+                activeCell = nil
+                table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
+                table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
+                return
+            }
+        }
         // Cmd+A select all
         if event.modifierFlags.contains(.command), let chars = event.charactersIgnoringModifiers, chars.lowercased() == "a" {
             table.selectAll(nil)
@@ -331,6 +364,19 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         } else {
             activeCell = key
         }
+        table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
+        table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
+    }
+
+    @objc private func toggleDisclosure(_ sender: NSButton) {
+        let row = sender.tag
+        guard row >= 0 && row < items.count else { return }
+        let idRaw = sender.identifier?.rawValue ?? ""
+        let parts = idRaw.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return }
+        let id = parts[1]
+        let key = CellKey(row: row, column: id)
+        if activeCell == key { activeCell = nil } else { activeCell = key }
         table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
         table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
     }
