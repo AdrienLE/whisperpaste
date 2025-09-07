@@ -491,11 +491,28 @@ final class MenuBarController: NSObject {
     private static func loadStatusIcon() -> NSImage? {
         // Highest priority: explicit dev-run path
         let env = ProcessInfo.processInfo.environment
-        if let customPath = env["WP_STATUS_ICON_PATH"], !customPath.isEmpty,
-           FileManager.default.fileExists(atPath: customPath),
-           let img = NSImage(contentsOfFile: customPath) {
-            img.isTemplate = true
-            return img
+        // Support both 1x and 2x paths for crisper dev icon rendering
+        let path1x = env["WP_STATUS_ICON_PATH_1X"] ?? env["WP_STATUS_ICON_PATH"]
+        let path2x = env["WP_STATUS_ICON_PATH_2X"]
+        if let p1 = path1x, !p1.isEmpty, FileManager.default.fileExists(atPath: p1) {
+            if let p2 = path2x, !p2.isEmpty, FileManager.default.fileExists(atPath: p2) {
+                // Combine 1x and 2x reps into a single NSImage
+                let size = NSSize(width: 18, height: 18)
+                let combined = NSImage(size: size)
+                if let img1 = NSImage(contentsOfFile: p1), let rep1 = img1.representations.first {
+                    rep1.size = size
+                    combined.addRepresentation(rep1)
+                }
+                if let img2 = NSImage(contentsOfFile: p2), let rep2 = img2.representations.first {
+                    rep2.size = size
+                    combined.addRepresentation(rep2)
+                }
+                combined.isTemplate = true
+                return combined
+            } else if let img = NSImage(contentsOfFile: p1) {
+                img.isTemplate = true
+                return img
+            }
         }
         if let named = NSImage(named: "statusIconTemplate") { return named }
         if let path = Bundle.main.path(forResource: "statusIconTemplate", ofType: "png") {
@@ -523,20 +540,27 @@ final class MenuBarController: NSObject {
 
     private func installEventMonitors() {
         if eventMonitor == nil {
-            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-                self?.maybeClosePopoverOnOutsideClick()
+            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                self?.maybeClosePopoverOnOutsideClick(event: event)
             }
         }
         if localEventMonitor == nil {
             localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                self?.maybeClosePopoverOnOutsideClick()
+                self?.maybeClosePopoverOnOutsideClick(event: event)
                 return event
             }
         }
     }
 
-    private func maybeClosePopoverOnOutsideClick() {
+    private func maybeClosePopoverOnOutsideClick(event: NSEvent?) {
         guard popover.isShown else { return }
+        // If the click is on the status item button, do not close; we'll toggle state instead
+        if let e = event, let button = statusItem.button, let win = button.window {
+            let buttonRectInScreen = win.convertToScreen(button.bounds)
+            // For global monitors, locationInWindow is in screen coords when event.window is nil
+            let pointInScreen = (e.window != nil) ? win.convertToScreen(NSRect(origin: e.locationInWindow, size: .zero)).origin : e.locationInWindow
+            if buttonRectInScreen.contains(pointInScreen) { return }
+        }
         if previewVC.state == .idle {
             popover.performClose(nil)
         } else {

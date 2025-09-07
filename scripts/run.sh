@@ -11,7 +11,8 @@ echo "[run] Preparing dev tray icon (trim tight, grayscale)..."
 cd App/.. || exit 1
 ICON_SRC="icon.png"
 DEV_ICON_DIR="dist/.dev_icon"
-STATUS_ICON="$DEV_ICON_DIR/statusIconTemplate.png"
+STATUS_ICON_1X="$DEV_ICON_DIR/statusIconTemplate.png"
+STATUS_ICON_2X="$DEV_ICON_DIR/statusIconTemplate@2x.png"
 mkdir -p "$DEV_ICON_DIR"
 if [[ -f "$ICON_SRC" ]]; then
   if command -v magick >/dev/null 2>&1 || command -v convert >/dev/null 2>&1 || command -v identify >/dev/null 2>&1; then
@@ -29,12 +30,17 @@ if [[ -f "$ICON_SRC" ]]; then
     # Tight square, grayscale, make near-white transparent; thicken at full res, then downscale crisply and sharpen
     DILATE_KERNEL="${WP_TRAY_DILATE:-Octagon:7}"
     echo "[run] Tray thickness kernel: ${DILATE_KERNEL}"
-    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 18x18 "$STATUS_ICON" || true
+    # Generate both 1x (18pt) and 2x (36pt) status icons to match packaged app fidelity
+    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 18x18 "$STATUS_ICON_1X" || true
+    "${IM_CONVERT[@]}" "$DEV_ICON_DIR/trim.png" -background none -gravity center -extent ${SIDE}x${SIDE} -colorspace Gray -alpha on -fuzz 5% -transparent white -channel A -morphology Dilate $DILATE_KERNEL +channel -resize 36x36 "$STATUS_ICON_2X" || true
   else
     # Fallback: basic resize; template rendering by macOS will tint it
-    sips -s format png -z 18 18 "$ICON_SRC" --out "$STATUS_ICON" >/dev/null || true
+    sips -s format png -z 18 18 "$ICON_SRC" --out "$STATUS_ICON_1X" >/dev/null || true
+    sips -s format png -z 36 36 "$ICON_SRC" --out "$STATUS_ICON_2X" >/dev/null || true
   fi
-  export WP_STATUS_ICON_PATH="$STATUS_ICON"
+  export WP_STATUS_ICON_PATH="$STATUS_ICON_1X"
+  export WP_STATUS_ICON_PATH_1X="$STATUS_ICON_1X"
+  export WP_STATUS_ICON_PATH_2X="$STATUS_ICON_2X"
 fi
 
 echo "[run] Building and launching WhisperpasteApp..."
