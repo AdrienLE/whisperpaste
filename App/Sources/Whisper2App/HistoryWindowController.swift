@@ -9,11 +9,11 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     private let table = NSTableView()
     private let scroll = NSScrollView()
-    private let playBtn = NSButton(title: "Play", target: nil, action: nil)
-    private let revealBtn = NSButton(title: "Reveal in Finder", target: nil, action: nil)
-    private let cleanBtn = NSButton(title: "Remove Missing Audio", target: nil, action: nil)
     private let clearAudioBtn = NSButton(title: "Clear All Audio", target: nil, action: nil)
     private let clearHistoryBtn = NSButton(title: "Clear History", target: nil, action: nil)
+    private let refreshBtn = NSButton(title: "Refresh", target: nil, action: nil)
+
+    private var expandedRows = Set<Int>()
 
     init(historyStore: HistoryStore) {
         self.historyStore = historyStore
@@ -38,9 +38,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private func setupUI() {
         guard let content = window?.contentView else { return }
 
+        let playCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("play"))
+        playCol.title = ""
+        playCol.width = 28
+        playCol.minWidth = 24
+        playCol.maxWidth = 36
+
         let dateCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("date"))
         dateCol.title = "Date"
-        dateCol.width = 160
+        dateCol.width = 140
         let previewCol = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("preview"))
         previewCol.title = "Preview"
         previewCol.width = 200
@@ -51,45 +57,36 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         cleanCol.title = "Cleaned"
         cleanCol.width = 220
 
+        table.addTableColumn(playCol)
         table.addTableColumn(dateCol)
         table.addTableColumn(previewCol)
         table.addTableColumn(rawCol)
         table.addTableColumn(cleanCol)
         table.usesAlternatingRowBackgroundColors = true
-        table.allowsMultipleSelection = false
-        table.allowsEmptySelection = false
+        table.allowsMultipleSelection = true
+        table.allowsEmptySelection = true
         table.delegate = self
         table.dataSource = self
+        table.target = self
+        table.doubleAction = #selector(tableDoubleClicked(_:))
 
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(scroll)
-        playBtn.target = self
-        playBtn.action = #selector(playAudio)
-        playBtn.toolTip = "Play the selected entry's audio file"
-        revealBtn.target = self
-        revealBtn.action = #selector(revealAudio)
-        revealBtn.toolTip = "Reveal the selected entry's audio file in Finder"
-        cleanBtn.target = self
-        cleanBtn.action = #selector(cleanMissing)
-        cleanBtn.toolTip = "Remove history entries whose audio file is missing"
         clearAudioBtn.target = self
         clearAudioBtn.action = #selector(clearAllAudio)
         clearAudioBtn.toolTip = "Delete audio files from all entries but keep text"
         clearHistoryBtn.target = self
         clearHistoryBtn.action = #selector(clearHistory)
         clearHistoryBtn.toolTip = "Remove all history entries (text and audio)"
+        refreshBtn.target = self
+        refreshBtn.action = #selector(refresh)
 
         let buttons = NSStackView(views: [
-            NSButton(title: "Copy Raw", target: self, action: #selector(copyRaw)),
-            NSButton(title: "Copy Cleaned", target: self, action: #selector(copyCleaned)),
-            playBtn,
-            revealBtn,
-            cleanBtn,
             clearAudioBtn,
             clearHistoryBtn,
-            NSButton(title: "Refresh", target: self, action: #selector(refresh))
+            refreshBtn
         ])
         buttons.orientation = .horizontal
         buttons.spacing = 8
@@ -108,19 +105,78 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private func reload() {
         items = historyStore.load()
         table.reloadData()
-        // Ensure a single selection by default
-        if !items.isEmpty {
-            table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-        }
         updateButtonsForSelection()
     }
 
     // MARK: - DataSource/Delegate
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }
 
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        // Collapsed height
+        guard expandedRows.contains(row) else { return 28 }
+        // Expanded: compute needed height for wrapped text across visible columns
+        let padding: CGFloat = 8
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        var maxHeight: CGFloat = 0
+        func heightFor(text: String, width: CGFloat) -> CGFloat {
+            guard width > 0 else { return 0 }
+            let attr = NSAttributedString(string: text, attributes: [.font: font])
+            let rect = attr.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading])
+            return ceil(rect.height)
+        }
+        for (idx, col) in table.tableColumns.enumerated() {
+            let id = col.identifier.rawValue
+            // Skip play column
+            if id == "play" { continue }
+            let w = col.width - 8
+            let item = items[row]
+            let text: String
+            switch id {
+            case "date":
+                let fmt = DateFormatter(); fmt.dateStyle = .short; fmt.timeStyle = .short
+                text = fmt.string(from: item.createdAt)
+            case "preview": text = item.previewText ?? ""
+            case "raw": text = item.rawText
+            case "clean": text = item.cleanedText
+            default: text = ""
+            }
+            let h = heightFor(text: text, width: w)
+            if h > maxHeight { maxHeight = h }
+            if idx >= table.tableColumns.count - 1 { /* last */ }
+        }
+        // Minimum height
+        return max(28, maxHeight + padding)
+    }
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let item = items[row]
         let id = tableColumn?.identifier.rawValue
+        if id == "play" {
+            let cell = NSTableCellView()
+            let btn = NSButton()
+            btn.bezelStyle = .inline
+            btn.isBordered = false
+            btn.title = ""
+            if let path = item.audioFilePath, FileManager.default.fileExists(atPath: path) {
+                if let img = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Play") { btn.image = img } else { btn.title = "▶︎" }
+                btn.isEnabled = true
+                btn.toolTip = "Play audio"
+            } else {
+                if let img = NSImage(systemSymbolName: "play.slash.fill", accessibilityDescription: "No Audio") { btn.image = img } else { btn.title = "–" }
+                btn.isEnabled = false
+                btn.toolTip = "No audio available"
+            }
+            btn.target = self
+            btn.action = #selector(playButtonTapped(_:))
+            btn.tag = row
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            cell.addSubview(btn)
+            NSLayoutConstraint.activate([
+                btn.centerXAnchor.constraint(equalTo: cell.centerXAnchor),
+                btn.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+            return cell
+        }
         let text: String
         switch id {
         case "date":
@@ -134,44 +190,47 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         default: text = ""
         }
         let cell = NSTableCellView()
-        let label = NSTextField(labelWithString: text)
-        label.lineBreakMode = .byTruncatingMiddle
-        label.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(label)
+        let tf = NSTextField()
+        tf.isEditable = false
+        tf.isBordered = false
+        tf.drawsBackground = false
+        tf.allowsEditingTextAttributes = false
+        tf.translatesAutoresizingMaskIntoConstraints = false
+        let expanded = expandedRows.contains(row)
+        tf.isSelectable = expanded
+        if expanded {
+            tf.lineBreakMode = .byWordWrapping
+            tf.maximumNumberOfLines = 0
+            tf.usesSingleLineMode = false
+            tf.cell?.wraps = true
+        } else {
+            tf.lineBreakMode = .byTruncatingMiddle
+            tf.maximumNumberOfLines = 1
+            tf.usesSingleLineMode = true
+            tf.cell?.wraps = false
+        }
+        tf.stringValue = text
+        cell.addSubview(tf)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-            label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            tf.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+            tf.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+            tf.topAnchor.constraint(equalTo: cell.topAnchor, constant: 4),
+            tf.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -4)
         ])
         return cell
     }
 
     // MARK: - Actions
-    @objc private func copyRaw() { copy(column: \.rawText) }
-    @objc private func copyCleaned() { copy(column: \.cleanedText) }
     @objc private func refresh() { reload() }
-    @objc private func cleanMissing() {
-        let alert = NSAlert()
-        alert.messageText = "Remove entries with missing audio?"
-        alert.informativeText = "This will remove any history items whose audio file cannot be found on disk."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn {
-            try? historyStore.cleanMissingAudioReferences(); reload()
-        }
-    }
-    @objc private func playAudio() {
-        guard let path = selectedAudioPath() else { NSSound.beep(); return }
+    @objc private func playButtonTapped(_ sender: NSButton) {
+        let row = sender.tag
+        guard row >= 0 && row < items.count else { return }
+        guard let path = items[row].audioFilePath, FileManager.default.fileExists(atPath: path) else { NSSound.beep(); return }
         do {
             player = try AVAudioPlayer(contentsOf: URL(fileURLWithPath: path))
             player?.prepareToPlay()
             player?.play()
         } catch { NSSound.beep() }
-    }
-    @objc private func revealAudio() {
-        guard let path = selectedAudioPath() else { NSSound.beep(); return }
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
     private func copy(column: KeyPath<TranscriptionRecord, String>) {
@@ -195,9 +254,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     private func updateButtonsForSelection() {
-        let hasAudio = (selectedAudioPath() != nil)
-        playBtn.isEnabled = hasAudio
-        revealBtn.isEnabled = hasAudio
+        // No per-selection buttons remain; nothing to toggle here.
     }
 
     // MARK: - Bulk actions
@@ -229,22 +286,42 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     // MARK: - Delete single
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 51 { // delete key
+        if event.keyCode == 51 { // delete
             deleteSelected()
+            return
         }
+        // Cmd+A select all
+        if event.modifierFlags.contains(.command), let chars = event.charactersIgnoringModifiers, chars.lowercased() == "a" {
+            table.selectAll(nil)
+            return
+        }
+        super.keyDown(with: event)
     }
 
     @objc private func deleteSelected() {
-        let row = table.selectedRow
-        guard row >= 0 else { NSSound.beep(); return }
+        let selected = table.selectedRowIndexes
+        guard !selected.isEmpty else { NSSound.beep(); return }
         let alert = NSAlert()
-        alert.messageText = "Delete selected entry?"
+        alert.messageText = selected.count == 1 ? "Delete selected entry?" : "Delete \(selected.count) entries?"
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn {
-            try? historyStore.delete(at: row)
+            // Delete from bottom-most index to preserve positions
+            selected.reversed().forEach { try? historyStore.delete(at: $0) }
             reload()
         }
+    }
+
+    @objc private func tableDoubleClicked(_ sender: Any?) {
+        let row = table.clickedRow
+        guard row >= 0 && row < items.count else { return }
+        if expandedRows.contains(row) {
+            expandedRows.remove(row)
+        } else {
+            expandedRows.insert(row)
+        }
+        table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
+        table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
     }
 }
