@@ -1,5 +1,5 @@
 import XCTest
-@testable import Whisper2Core
+@testable import WhisperpasteCore
 import Foundation
 
 final class SettingsMigrationTests: XCTestCase {
@@ -63,4 +63,3 @@ final class SettingsMigrationTests: XCTestCase {
         XCTAssertEqual(loaded.showAllModels, s.showAllModels)
     }
 }
-

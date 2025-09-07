@@ -1,6 +1,6 @@
 import AppKit
 import AVFoundation
-import Whisper2Core
+import WhisperpasteCore
 
 final class HistoryWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private let historyStore: HistoryStore
@@ -228,14 +228,14 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     // MARK: - Delete single
-    @objc private func keyDown(with event: NSEvent) {
+    override func keyDown(with event: NSEvent) {
         if event.keyCode == 51 { // delete key
             deleteSelected()
         }
     }
 
     @objc private func deleteSelected() {
-        var row = table.selectedRow
+        let row = table.selectedRow
         guard row >= 0 else { NSSound.beep(); return }
         let alert = NSAlert()
         alert.messageText = "Delete selected entry?"

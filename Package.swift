@@ -2,24 +2,24 @@
 import PackageDescription
 
 let package = Package(
-    name: "whisper2",
+    name: "whisperpaste",
     platforms: [
         .macOS(.v12)
     ],
     products: [
-        .library(name: "Whisper2Core", targets: ["Whisper2Core"])
+        .library(name: "WhisperpasteCore", targets: ["WhisperpasteCore"])
     ],
     dependencies: [
         // No external dependencies in the skeleton.
     ],
     targets: [
         .target(
-            name: "Whisper2Core",
+            name: "WhisperpasteCore",
             path: "Sources/Whisper2Core"
         ),
         .testTarget(
-            name: "Whisper2CoreTests",
-            dependencies: ["Whisper2Core"],
+            name: "WhisperpasteCoreTests",
+            dependencies: ["WhisperpasteCore"],
             path: "Tests/Whisper2CoreTests"
         )
     ]

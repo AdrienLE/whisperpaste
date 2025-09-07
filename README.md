@@ -39,7 +39,7 @@ Quick Start
   - Launch `dist/WhisperPaste.app` (has proper icons and usage descriptions).
 
 Settings (what to tweak)
-- OpenAI API key (stored securely in Keychain).
+- OpenAI API key (stored in app settings JSON — not secure; placeholder for dev use).
 - Transcription Model + Transcription Prompt (sent to the transcription endpoint).
 - Enable cleanup (chat model) to show Cleanup Model + Cleanup Prompt; disable for transcription‑only.
 - Show all models (applies to cleanup model list).
@@ -48,7 +48,7 @@ Settings (what to tweak)
 Privacy & Storage
 - Settings + history: `~/Library/Application Support/whisperpaste/`.
 - Audio: compressed to low‑bitrate AAC (M4A) before upload to save bandwidth.
-- API key: stored only in Keychain (never persisted to JSON).
+- API key: stored in settings JSON (insecure). Prefer Keychain in a production build.
 
 Developer Scripts
 - `scripts/test.sh` — run unit tests for the core library.
@@ -73,7 +73,7 @@ MIT — see `LICENSE`.
 - `scripts/build.sh`: Builds the app (SPM executable) in release mode.
 - `scripts/run.sh`: Builds and runs the app.
 - `scripts/build_and_run.sh`: Runs tests, then builds and runs.
-- `scripts/package_app.sh`: Packages a proper macOS `.app` bundle with Info.plist (Mic + Speech usage descriptions). Launch it with `open dist/Whisper2.app`.
+- `scripts/package_app.sh`: Packages a proper macOS `.app` bundle with Info.plist (Mic + Speech usage descriptions). Launch it with `open dist/WhisperPaste.app`.
 
 Usage:
 

@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import AVFoundation
-import Whisper2Core
+import WhisperpasteCore
 
 final class MenuBarController: NSObject {
     private(set) var statusItem: NSStatusItem!
@@ -42,7 +42,7 @@ final class MenuBarController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             let s = self.settingsStore.load()
-            if (Keychain.shared.getOpenAIKey() ?? "").isEmpty {
+            if (s.openAIKey ?? "").isEmpty {
                 self.presentSettings(force: true)
             }
             self.registerHotkey(from: s.hotkey)
@@ -77,7 +77,7 @@ final class MenuBarController: NSObject {
     private func toggleRecording() {
         guard let button = statusItem.button else { return }
         // Must have API key to proceed with transcription
-        if (Keychain.shared.getOpenAIKey() ?? "").isEmpty {
+        if ((settingsStore.load().openAIKey ?? "").isEmpty) {
             presentSettings(force: true)
             NSSound.beep()
             return
@@ -138,7 +138,7 @@ final class MenuBarController: NSObject {
             finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: nil, source: "preview")
             return
         }
-        guard let key = Keychain.shared.getOpenAIKey(), !key.isEmpty else {
+        guard let key = settings.openAIKey, !key.isEmpty else {
             // No API key, use preview text
             NSLog("Pipeline: Missing API key; using live preview text")
             finalizeRecord(raw: previewVC.currentText, cleaned: previewVC.currentText, audioURL: settings.keepAudioFiles ? audioURL : nil, source: "preview")

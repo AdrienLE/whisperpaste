@@ -1,5 +1,5 @@
 import AppKit
-import Whisper2Core
+import WhisperpasteCore
 
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let settingsStore: SettingsStore
@@ -194,7 +194,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     // Cleanup container removed in favor of flat rows that we enable/disable
 
     private func loadValues() {
-        apiKeyField.stringValue = Keychain.shared.getOpenAIKey() ?? ""
+        apiKeyField.stringValue = settings.openAIKey ?? ""
         // Populate from persisted model lists if present (transcription list ignores showAll)
         transcriptionPopup.removeAllItems()
         if let models = settings.knownTranscriptionModels, !models.isEmpty {
@@ -222,10 +222,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func saveTapped() {
-        // Store API key to Keychain; keep JSON empty for security
+        // Persist API key directly in settings (insecure placeholder storage)
         let typedKey = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        Keychain.shared.setOpenAIKey(typedKey.isEmpty ? nil : typedKey)
-        settings.openAIKey = nil
+        settings.openAIKey = typedKey.isEmpty ? nil : typedKey
         settings.transcriptionModel = transcriptionPopup.titleOfSelectedItem ?? settings.transcriptionModel
         settings.cleanupModel = cleanupPopup.titleOfSelectedItem ?? settings.cleanupModel
         settings.transcriptionPrompt = transcriptionPromptEditor.string
@@ -254,7 +253,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func refreshModels() {
-        let candidate = apiKeyField.stringValue.isEmpty ? (Keychain.shared.getOpenAIKey() ?? "") : apiKeyField.stringValue
+        let candidate = apiKeyField.stringValue.isEmpty ? (settings.openAIKey ?? "") : apiKeyField.stringValue
         guard !candidate.isEmpty else { NSSound.beep(); return }
         let apiKey = candidate
         let client = OpenAIClient()

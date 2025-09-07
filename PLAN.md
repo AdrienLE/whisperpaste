@@ -1,4 +1,4 @@
-# Plan: Whisper2 Menu Bar App
+# Plan: WhisperPaste Menu Bar App
 
 Status: In Progress — core, UI, live preview, and pipeline implemented; hotkey + packaging ongoing
 
@@ -7,7 +7,7 @@ Goals
 
 Phases
 1) Skeleton + Core (done)
-   - SPM workspace with `Whisper2Core` (models, storage) + tests.
+   - SPM workspace with `WhisperpasteCore` (models, storage) + tests.
    - Menu bar app stub with left-click toggle + popover, right-click menu.
    - Basic Settings/History window stubs.
    - Build/run/test scripts.
@@ -42,8 +42,8 @@ Phases
 
 Current Status (as of this update)
 - Implemented: menu bar app, live preview (Apple Speech), OpenAI transcription + cleanup pipeline, Settings (editable + Save closes), History, dynamic model fetch, hotkey recorder UI, basic global hotkey manager, packaging script for `.app`.
-- Permissions: For reliable mic/speech prompts, use the packaged app (`scripts/package_app.sh` then `open dist/Whisper2.app`).
-- Known issues: Building the `App` SwiftPM package in this environment sporadically fails after linking Carbon (for global hotkeys). Tests for `Whisper2Core` continue to pass. To resolve, test via the packaged app and/or migrate to an Xcode project for full control over entitlements and linking.
+- Permissions: For reliable mic/speech prompts, use the packaged app (`scripts/package_app.sh` then `open dist/WhisperPaste.app`).
+- Known issues: Building the `App` SwiftPM package in this environment sporadically fails after linking Carbon (for global hotkeys). Tests for `WhisperpasteCore` continue to pass. To resolve, test via the packaged app and/or migrate to an Xcode project for full control over entitlements and linking.
 
 Bug Fixes (2025-08-25)
 - Live Preview readability: switched preview editor to a true read-only presentation (no border/background, no first responder), and unified text coloring to `labelColor` to ensure dark-mode visibility within popovers.
@@ -73,3 +73,21 @@ Pause Note
 Today’s Progress
 - Initialized skeleton (core library + tests, menu bar stub, scripts).
 - Next: migrate to app bundle and enable Apple live transcription.
+
+Renames (2025-09-01)
+- Standardized naming from whisper2 → whisperpaste across packages, module, app target, scripts, and docs. Core module is now `WhisperpasteCore`, app executable `WhisperpasteApp`, and root SwiftPM package `whisperpaste`. Legacy `~/Library/Application Support/whisper2/` remains supported for migration.
+
+Build/Packaging Fix (2025-09-04)
+- Resolved PCH/module cache path mismatch after moving the repo directory (e.g., whisper2 → whisperpaste), which manifested as “PCH was compiled with module cache path …” and “missing required module 'SwiftShims'”.
+- scripts/package_app.sh now cleans the App package before any build and only resolves the binary path after a successful build. Specifically: runs `swift package clean`, removes `App/.build`, then builds. This ensures stale ModuleCache entries don’t leak across paths.
+- Action: use `scripts/install_app.sh` or `scripts/package_app.sh` again; the scripts will clean and rebuild in the new path.
+
+Bug Fix (2025-09-04)
+- History: Fixed `HistoryWindowController.keyDown(with:)` declaration. It now correctly overrides `NSResponder.keyDown` and is not `private`, resolving “overriding instance method must be as accessible as its enclosing type” and missing `override` errors. Also switched a never-mutated `var` to `let`.
+
+Security Change (2025-09-07)
+- Per request, removed Keychain usage for the OpenAI API key. The key is now stored directly in `Settings.openAIKey` (JSON under `~/Library/Application Support/whisperpaste/settings.json`). Updated Settings UI, MenuBar checks, and README. Dropped the `Security` framework and deleted `Keychain.swift`.
+
+Recording Reliability (2025-09-07)
+- Added verbose `NSLog` tracing around the recording lifecycle (start/auth/mic access/configure/start/stop) to debug “second recording” failures.
+- On stop, call `engine.reset()` after `engine.stop()` and log finish details. This can help release audio resources for subsequent sessions.

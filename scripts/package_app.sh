@@ -6,11 +6,18 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="WhisperPaste"
 APP_DIR="dist/${APP_NAME}.app"
-BIN_PATH="$(cd App && swift build -c release --show-bin-path)"
-BIN="${BIN_PATH}/Whisper2App"
+
+# Clean before any build to avoid stale PCH/module cache issues when the repo path changes
+echo "[package] Cleaning previous build artifacts…"
+(cd App && swift package clean >/dev/null 2>&1 || true)
+rm -rf "App/.build"
 
 echo "[package] Building SwiftPM app binary..."
 (cd App && swift build -c release)
+
+# Resolve binary path after a successful build
+BIN_PATH="$(cd App && swift build -c release --show-bin-path)"
+BIN="${BIN_PATH}/WhisperpasteApp"
 
 echo "[package] Creating app bundle at ${APP_DIR}..."
 rm -rf "${APP_DIR}"

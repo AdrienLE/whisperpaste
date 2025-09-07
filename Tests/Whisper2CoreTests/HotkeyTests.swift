@@ -1,5 +1,5 @@
 import XCTest
-@testable import Whisper2Core
+@testable import WhisperpasteCore
 
 final class HotkeyTests: XCTestCase {
     func testParseSimple() {
@@ -26,4 +26,3 @@ final class HotkeyTests: XCTestCase {
         XCTAssertNil(Hotkey.parse(""))
     }
 }
-

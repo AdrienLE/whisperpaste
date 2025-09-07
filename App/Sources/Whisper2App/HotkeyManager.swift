@@ -1,6 +1,6 @@
 import AppKit
 import Carbon
-import Whisper2Core
+import WhisperpasteCore
 
 final class HotkeyManager {
     private var currentRef: EventHotKeyRef?

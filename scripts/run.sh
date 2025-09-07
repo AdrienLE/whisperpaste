@@ -37,5 +37,5 @@ if [[ -f "$ICON_SRC" ]]; then
   export WP_STATUS_ICON_PATH="$STATUS_ICON"
 fi
 
-echo "[run] Building and launching Whisper2App..."
-cd App && swift run -c release Whisper2App
+echo "[run] Building and launching WhisperpasteApp..."
+cd App && swift run -c release WhisperpasteApp

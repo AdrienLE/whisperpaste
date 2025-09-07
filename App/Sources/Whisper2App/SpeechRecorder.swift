@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 import Speech
-import Whisper2Core
+import WhisperpasteCore
 
 final class SpeechRecorder {
     private let engine = AVAudioEngine()
@@ -32,15 +32,18 @@ final class SpeechRecorder {
         guard !isRunning else { return }
         isRunning = true
         accumulatedPreview = ""
+        NSLog("SpeechRecorder: start() invoked")
 
         // Request permissions
         SFSpeechRecognizer.requestAuthorization { [weak self] auth in
             guard let self = self else { return }
+            NSLog("SpeechRecorder: speech auth status=\(auth.rawValue)")
             guard auth == .authorized else {
                 self.finishWithError(NSError(domain: "SpeechRecorder", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech recognition not authorized"]))
                 return
             }
             AVCaptureDevice.requestAccess(for: .audio) { granted in
+                NSLog("SpeechRecorder: mic access granted=\(granted)")
                 guard granted else {
                     self.finishWithError(NSError(domain: "SpeechRecorder", code: 2, userInfo: [NSLocalizedDescriptionKey: "Microphone access denied"]))
                     return
@@ -51,6 +54,7 @@ final class SpeechRecorder {
     }
 
     private func configureAndStart() {
+        NSLog("SpeechRecorder: configureAndStart() begin")
         // Prepare audio file path
         do {
             let audioDir = try AppSupportPaths.audioDirectory()
@@ -58,7 +62,9 @@ final class SpeechRecorder {
             let name = "rec-" + ISO8601DateFormatter().string(from: Date()) + ".wav"
             let url = audioDir.appendingPathComponent(name)
             audioURL = url
+            NSLog("SpeechRecorder: will write WAV to \(url.lastPathComponent)")
         } catch {
+            NSLog("SpeechRecorder: failed to create audio path: \(error.localizedDescription)")
             onError?(error)
         }
 
@@ -81,18 +87,24 @@ final class SpeechRecorder {
                     self.onPreview?(text)
                 }
                 if let error = error {
+                    NSLog("SpeechRecorder: recognition error=\(error.localizedDescription)")
                     self.finishWithError(error)
                 }
                 // Do not auto-stop here; stopping is user-controlled.
             }
         } else {
+            NSLog("SpeechRecorder: recognizer unavailable or request missing")
             onPreview?("Live preview unavailable for current locale")
         }
 
         // File for writing
         if let audioURL = audioURL {
-            do { audioFile = try AVAudioFile(forWriting: audioURL, settings: format.settings) }
-            catch { onError?(error) }
+            do {
+                audioFile = try AVAudioFile(forWriting: audioURL, settings: format.settings)
+            } catch {
+                NSLog("SpeechRecorder: AVAudioFile open failed: \(error.localizedDescription)")
+                onError?(error)
+            }
         }
 
         // Install tap to capture mic
@@ -107,13 +119,16 @@ final class SpeechRecorder {
         engine.prepare()
         do {
             try engine.start()
+            NSLog("SpeechRecorder: engine started")
         } catch {
+            NSLog("SpeechRecorder: engine start failed: \(error.localizedDescription)")
             finishWithError(error)
         }
     }
 
     func stop() {
         guard isRunning else { return }
+        NSLog("SpeechRecorder: stop() invoked")
         isRunning = false
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
@@ -121,12 +136,16 @@ final class SpeechRecorder {
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self = self else { return }
             self.engine.stop()
+            self.engine.reset()
             self.task?.cancel()
             self.task = nil
             self.request = nil
             let url = self.audioURL
             self.audioFile = nil
-            DispatchQueue.main.async { self.onFinish?(url) }
+            DispatchQueue.main.async {
+                NSLog("SpeechRecorder: finished, url=\(url?.lastPathComponent ?? "nil")")
+                self.onFinish?(url)
+            }
         }
     }
 

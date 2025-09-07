@@ -1,5 +1,5 @@
 import XCTest
-@testable import Whisper2Core
+@testable import WhisperpasteCore
 import Foundation
 
 final class AppSupportPathsTests: XCTestCase {

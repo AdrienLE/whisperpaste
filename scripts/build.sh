@@ -7,5 +7,5 @@ if [[ "$OS" == "Darwin" ]]; then
   (cd App && swift build -c release)
 else
   echo "[build] Non-macOS host detected. Building core library only..."
-  swift build -c release --target Whisper2Core
+  swift build -c release --target WhisperpasteCore
 fi

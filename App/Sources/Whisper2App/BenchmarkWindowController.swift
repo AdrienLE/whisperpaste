@@ -1,6 +1,6 @@
 import AppKit
 import AVFoundation
-import Whisper2Core
+import WhisperpasteCore
 
 final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     struct Result {

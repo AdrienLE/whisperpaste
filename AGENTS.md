@@ -5,11 +5,12 @@ Working Agreement
 - Keep changes small, frequent, and focused. Write clear commit messages referencing the plan.
 - Run `scripts/test.sh` before committing; only commit when tests pass and the app at least builds.
 - After any successful change, run tests and commit the change with a clear message that references the related `PLAN.md` entry.
+- Agent rule: For any change you make, commit it immediately after tests pass with a message referencing the relevant `PLAN.md` entry. Do not defer commits.
 - If blocked (e.g., missing toolchain), push plan updates without committing risky changes and note blockers in the PR/commit message.
 
 Coding Guidelines
 - Keep the macOS focus; prefer native frameworks (AppKit/AVFoundation/Speech) where practical.
-- Separate core logic (`Whisper2Core`) from UI; make the core testable.
+- Separate core logic (`WhisperpasteCore`) from UI; make the core testable.
 - Defer network calls and external services behind protocol abstractions so they can be mocked in tests.
 - Persist user settings/history under `~/Library/Application Support/whisperpaste/` (reads legacy `whisper2/` if present for migration).
 

@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import Whisper2Core
+import WhisperpasteCore
 
 @main
 final class AppMain: NSObject, NSApplicationDelegate {

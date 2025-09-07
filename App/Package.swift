@@ -2,27 +2,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "Whisper2AppPkg",
+    name: "WhisperpasteAppPkg",
     platforms: [ .macOS(.v12) ],
     products: [
-        .executable(name: "Whisper2App", targets: ["Whisper2App"])
+        .executable(name: "WhisperpasteApp", targets: ["WhisperpasteApp"])
     ],
     dependencies: [
         .package(path: "..")
     ],
     targets: [
         .executableTarget(
-            name: "Whisper2App",
+            name: "WhisperpasteApp",
             dependencies: [
-                .product(name: "Whisper2Core", package: "whisper2")
+                .product(name: "WhisperpasteCore", package: "whisperpaste")
             ],
             path: "Sources/Whisper2App",
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("Speech"),
-                .linkedFramework("Carbon"),
-                .linkedFramework("Security")
+                .linkedFramework("Carbon")
             ]
         )
     ]
