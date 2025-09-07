@@ -2,15 +2,15 @@
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 cd "$(dirname "$0")/.."
+ROOT_DIR="$(pwd -P)"
 OS="$(uname -s)"
 if [[ "$OS" != "Darwin" ]]; then
   echo "[run] This app can only run on macOS (Darwin)." >&2
   exit 1
 fi
 echo "[run] Preparing dev tray icon (trim tight, grayscale)..."
-cd App/.. || exit 1
-ICON_SRC="icon.png"
-DEV_ICON_DIR="dist/.dev_icon"
+ICON_SRC="$ROOT_DIR/icon.png"
+DEV_ICON_DIR="$ROOT_DIR/dist/.dev_icon"
 STATUS_ICON_1X="$DEV_ICON_DIR/statusIconTemplate.png"
 STATUS_ICON_2X="$DEV_ICON_DIR/statusIconTemplate@2x.png"
 mkdir -p "$DEV_ICON_DIR"
