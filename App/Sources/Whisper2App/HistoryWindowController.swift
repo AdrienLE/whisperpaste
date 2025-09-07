@@ -13,7 +13,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     private let clearHistoryBtn = NSButton(title: "Clear History", target: nil, action: nil)
     private let refreshBtn = NSButton(title: "Refresh", target: nil, action: nil)
 
-    private var expandedRows = Set<Int>()
+    private struct CellKey: Hashable { let row: Int; let column: String }
+    private var activeCell: CellKey? = nil
 
     init(historyStore: HistoryStore) {
         self.historyStore = historyStore
@@ -112,40 +113,33 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        // Collapsed height
-        guard expandedRows.contains(row) else { return 28 }
-        // Expanded: compute needed height for wrapped text across visible columns
+        // Default collapsed height
+        guard let active = activeCell, active.row == row else { return 28 }
+        // Compute height based on the active cell's text and column width
         let padding: CGFloat = 8
         let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
-        var maxHeight: CGFloat = 0
         func heightFor(text: String, width: CGFloat) -> CGFloat {
             guard width > 0 else { return 0 }
             let attr = NSAttributedString(string: text, attributes: [.font: font])
             let rect = attr.boundingRect(with: NSSize(width: width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading])
             return ceil(rect.height)
         }
-        for (idx, col) in table.tableColumns.enumerated() {
-            let id = col.identifier.rawValue
-            // Skip play column
-            if id == "play" { continue }
-            let w = col.width - 8
-            let item = items[row]
-            let text: String
-            switch id {
+        guard let col = table.tableColumns.first(where: { $0.identifier.rawValue == active.column }) else { return 28 }
+        let w = col.width - 8
+        let item = items[row]
+        let text: String = {
+            switch active.column {
             case "date":
                 let fmt = DateFormatter(); fmt.dateStyle = .short; fmt.timeStyle = .short
-                text = fmt.string(from: item.createdAt)
-            case "preview": text = item.previewText ?? ""
-            case "raw": text = item.rawText
-            case "clean": text = item.cleanedText
-            default: text = ""
+                return fmt.string(from: item.createdAt)
+            case "preview": return item.previewText ?? ""
+            case "raw": return item.rawText
+            case "clean": return item.cleanedText
+            default: return ""
             }
-            let h = heightFor(text: text, width: w)
-            if h > maxHeight { maxHeight = h }
-            if idx >= table.tableColumns.count - 1 { /* last */ }
-        }
-        // Minimum height
-        return max(28, maxHeight + padding)
+        }()
+        let h = heightFor(text: text, width: w)
+        return max(28, h + padding)
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -196,9 +190,9 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         tf.drawsBackground = false
         tf.allowsEditingTextAttributes = false
         tf.translatesAutoresizingMaskIntoConstraints = false
-        let expanded = expandedRows.contains(row)
-        tf.isSelectable = expanded
-        if expanded {
+        let isActive = (activeCell?.row == row && activeCell?.column == id)
+        tf.isSelectable = isActive
+        if isActive {
             tf.lineBreakMode = .byWordWrapping
             tf.maximumNumberOfLines = 0
             tf.usesSingleLineMode = false
@@ -217,6 +211,13 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             tf.topAnchor.constraint(equalTo: cell.topAnchor, constant: 4),
             tf.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -4)
         ])
+        if isActive {
+            DispatchQueue.main.async { [weak tf] in
+                guard let tf = tf else { return }
+                tf.window?.makeFirstResponder(tf)
+                tf.selectText(nil)
+            }
+        }
         return cell
     }
 
@@ -254,7 +255,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
     }
 
     private func updateButtonsForSelection() {
-        // No per-selection buttons remain; nothing to toggle here.
+        // Enable Clear All Audio only when at least one record has an accessible audio file
+        let anyAudio = items.contains { rec in
+            if let p = rec.audioFilePath { return FileManager.default.fileExists(atPath: p) }
+            return false
+        }
+        clearAudioBtn.isEnabled = anyAudio
     }
 
     // MARK: - Bulk actions
@@ -315,11 +321,15 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     @objc private func tableDoubleClicked(_ sender: Any?) {
         let row = table.clickedRow
-        guard row >= 0 && row < items.count else { return }
-        if expandedRows.contains(row) {
-            expandedRows.remove(row)
+        let colIdx = table.clickedColumn
+        guard row >= 0 && row < items.count, colIdx >= 0 && colIdx < table.tableColumns.count else { return }
+        let id = table.tableColumns[colIdx].identifier.rawValue
+        guard id != "play" else { return }
+        let key = CellKey(row: row, column: id)
+        if activeCell == key {
+            activeCell = nil
         } else {
-            expandedRows.insert(row)
+            activeCell = key
         }
         table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
         table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
