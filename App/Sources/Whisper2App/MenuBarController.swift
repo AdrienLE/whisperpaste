@@ -140,11 +140,8 @@ final class MenuBarController: NSObject {
         self.previewVC.setState(.idle)
         self.setRecordingIcon(false)
         let recorderRef = recorder
-        recorderRef?.onFinish = { [weak self] url in
-            guard let self = self else { return }
-            if let u = url {
-                try? FileManager.default.removeItem(at: u)
-            }
+        recorderRef?.onFinish = { url in
+            if let u = url { try? FileManager.default.removeItem(at: u) }
         }
         recorderRef?.stop()
     }

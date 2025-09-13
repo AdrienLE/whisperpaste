@@ -121,7 +121,7 @@ final class LivePreviewViewController: NSViewController {
             abortButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            copyButton.isEnabled = !copyButton.isHidden
+            updateCopyButtonState()
             stopIndicator()
             refreshEditor()
         case .recording:
@@ -176,7 +176,7 @@ final class LivePreviewViewController: NSViewController {
             abortButton.isEnabled = false
             detailsButton.isHidden = (lastErrorDetails == nil)
             copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            copyButton.isEnabled = !copyButton.isHidden
+            updateCopyButtonState()
             stopIndicator()
             refreshEditor()
         }
@@ -190,6 +190,7 @@ final class LivePreviewViewController: NSViewController {
     func reset() {
         currentText = ""
         refreshEditor()
+        updateCopyButtonState()
     }
 
     private func refreshEditor() {
@@ -269,7 +270,7 @@ final class LivePreviewViewController: NSViewController {
     func showFinalText(_ text: String) {
         currentText = text
         copyButton.isHidden = currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        copyButton.isEnabled = !copyButton.isHidden
+        updateCopyButtonState()
         refreshEditor()
     }
 
@@ -279,5 +280,24 @@ final class LivePreviewViewController: NSViewController {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(textToCopy, forType: .string)
+        updateCopyButtonState()
+    }
+
+    private func updateCopyButtonState() {
+        // Only manage enabled/title; visibility is handled by state transitions
+        let trimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            copyButton.isEnabled = false
+            copyButton.title = "Copy"
+            return
+        }
+        let currentPB = NSPasteboard.general.string(forType: .string) ?? ""
+        if currentPB == trimmed {
+            copyButton.isEnabled = false
+            copyButton.title = "Copied"
+        } else {
+            copyButton.isEnabled = true
+            copyButton.title = "Copy"
+        }
     }
 }
