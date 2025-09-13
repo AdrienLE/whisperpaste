@@ -24,6 +24,9 @@ Features
 - 🧪 Benchmark window to compare model speeds.
 - 🎛️ Model filtering (hide “preview” / two‑digit variants by default) with “Show all models”.
 - 🖼️ Crisp, monochrome status icon and friendly UI.
+- ⌨️ Global hotkey to start/stop recording from anywhere.
+- ▶️ History playback (per‑row play button); Clear All Audio / Clear History.
+- 🧯 Abort during recording to discard audio and reset UI instantly.
 
 Requirements
 - macOS 12+
@@ -35,8 +38,17 @@ Quick Start
   - `./scripts/build_and_run.sh`
   - Click the tray icon to record; set your API key in Settings.
 - Packaged app:
-  - `./scripts/run_app.sh`
-  - Launch `dist/WhisperPaste.app` (has proper icons and usage descriptions).
+  - `./scripts/run_app.sh` (or `./scripts/install_app.sh` to install to `~/Applications`)
+  - Launch `dist/WhisperPaste.app` (proper icons and usage descriptions for Mic/Speech).
+
+Hotkey
+- Set your hotkey in Settings (e.g., `ctrl+shift+space`).
+- Press the hotkey to start/stop recording from anywhere. Popover stays open during processing.
+
+History
+- Double‑click a cell to expand and select/copy text; multi‑select rows with Cmd+A.
+- Use the per‑row play button to listen to saved audio if available.
+- Use Clear All Audio to delete files while keeping text, or Clear History to remove everything.
 
 Settings (what to tweak)
 - OpenAI API key (stored in app settings JSON — not secure; placeholder for dev use).
@@ -50,12 +62,23 @@ Privacy & Storage
 - Audio: compressed to low‑bitrate AAC (M4A) before upload to save bandwidth.
 - API key: stored in settings JSON (insecure). Prefer Keychain in a production build.
 
+Known Limitations
+- Not notarized/signed; for development use. Use Xcode project if you need distribution signing.
+- API key storage is intentionally insecure for the skeleton.
+- No offline transcription; network required for OpenAI calls and model list refresh.
+
 Developer Scripts
 - `scripts/test.sh` — run unit tests for the core library.
 - `scripts/run.sh` — build + run via SwiftPM with a dev tray icon.
 - `scripts/build_and_run.sh` — tests + run.
 - `scripts/build.sh` — release build (SPM).
 - `scripts/package_app.sh` — create `dist/WhisperPaste.app`.
+- `scripts/install_app.sh` — package, copy to `~/Applications`, and launch.
+
+Releasing
+- Set version/build and package:
+  - `WP_VERSION=1.0.0 WP_BUILD=1 ./scripts/package_app.sh`
+- Sanity‑check: launch the packaged app from `dist/WhisperPaste.app` and verify mic permissions, hotkey, recording, transcription/cleanup, history playback, copy button, and clear actions.
 
 Roadmap & Contributing
 - Check `PLAN.md` for the roadmap and `AGENTS.md` for how we work (tests before commits, small focused changes, etc.).

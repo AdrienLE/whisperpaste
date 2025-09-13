@@ -5,6 +5,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 cd "$(dirname "$0")/.."
 
 APP_NAME="WhisperPaste"
+APP_VERSION="${WP_VERSION:-1.0.0}"
+APP_BUILD="${WP_BUILD:-1}"
 APP_DIR="dist/${APP_NAME}.app"
 
 # Clean before any build to avoid stale PCH/module cache issues when the repo path changes
@@ -87,7 +89,7 @@ else
   echo "[package] ${ICON_SRC} not found; skipping icon generation"
 fi
 
-cat > "${APP_DIR}/Contents/Info.plist" <<'PLIST'
+cat > "${APP_DIR}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -105,9 +107,9 @@ cat > "${APP_DIR}/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>${APP_BUILD}</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>${APP_VERSION}</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>LSUIElement</key>

@@ -61,10 +61,11 @@ Bug Fixes (2025-08-31)
 - Cleanup HTTP 400: removed `temperature` from cleanup API calls because some models only accept the default; avoids unsupported-parameter errors.
 
 Next Steps
-- Tests: Add OpenAI client stubbed tests (no network); add unit tests for model filtering and storage cleanup paths.
-- Model lists: Extract filtering/partition logic to the core for testability; keep Settings UI using core helpers.
-- Docs: Finalize README with behavior notes (hotkey, audio retention, insecure key storage) and a short “Known limitations” section.
-- Optional: Xcode project for entitlements/signing and easier notarization. Current SPM packaging is sufficient for local use.
+- Release v1.0:
+  - Docs: finalize README (hotkey, playback, install, known limitations); add RELEASE.md checklist.
+  - Packaging: allow version via env (WP_VERSION/WP_BUILD) in `package_app.sh`.
+  - Tag: create `v1.0.0` after QA.
+  - Optional: Xcode project for entitlements/signing and notarization if distributing.
 
 Pause Note
 - Work continues; global hotkey and playback verified in packaged app. Use `scripts/package_app.sh` and run from `dist/` for proper permissions prompts.
