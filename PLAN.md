@@ -1,6 +1,6 @@
 # Plan: WhisperPaste Menu Bar App
 
-Status: In Progress — core, UI, live preview, and pipeline implemented; hotkey + packaging ongoing
+Status: In Progress — core, UI, live preview, pipeline, hotkey, playback implemented; packaging/script flow stable
 
 Goals
 - Ship a macOS menu bar app for dictation with live preview (Apple Speech), full transcription (OpenAI Whisper or equivalent), and cleanup (GPT), plus Settings, History, and a tray menu.
@@ -18,11 +18,11 @@ Phases
    - Optional: migrate to Xcode project for entitlements/notarization [pending].
    - Apple live transcription (AVAudioEngine + SFSpeechRecognizer) for preview [done].
 
-3) Recording + Storage
-   - Record audio to disk (CAF/WAV) with retention setting (keep/auto-clean) and cleanup tools.
+3) Recording + Storage (done)
+   - Record audio to disk (CAF/WAV→M4A) with retention setting (keep/auto-clean) and cleanup tools.
    - Robust, resumable storage of audio and history metadata.
 
-4) OpenAI Integrations (in progress)
+4) OpenAI Integrations (done)
    - Transcription via OpenAI API (configurable model) [implemented].
    - Cleanup via GPT with customizable prompt [implemented].
    - Settings UI for API key, models, prompt, and hotkey [implemented].
@@ -31,8 +31,8 @@ Phases
 
 5) UX Polish (in progress)
    - Popover live text, progress, and error handling [in place].
-   - History list with copy raw/cleaned, reveal/play audio, missing-audio handling [basic copy implemented; reveal/play pending].
-   - Global hotkey support (customizable) [hotkey recorder + Carbon registration added; needs verification under packaged app].
+   - History list with copy raw/cleaned and audio playback; handle missing audio gracefully [implemented].
+   - Global hotkey support (customizable) [implemented and verified in packaged app].
    - Dock icon only while Settings is open [added].
    - Live preview auto-scroll and animated in-progress indicator during recording [added].
 
@@ -41,9 +41,9 @@ Phases
    - Integration tests for transcription pipeline (mock network) [pending].
 
 Current Status (as of this update)
-- Implemented: menu bar app, live preview (Apple Speech), OpenAI transcription + cleanup pipeline, Settings (editable + Save closes), History, dynamic model fetch, hotkey recorder UI, basic global hotkey manager, packaging script for `.app`.
+- Implemented: menu bar app, live preview (Apple Speech), OpenAI transcription + cleanup pipeline, Settings (editable + Save closes), History with audio playback, dynamic model fetch, hotkey recorder UI + global hotkey manager, packaging script for `.app`.
 - Permissions: For reliable mic/speech prompts, use the packaged app (`scripts/package_app.sh` then `open dist/WhisperPaste.app`).
-- Known issues: Building the `App` SwiftPM package in this environment sporadically fails after linking Carbon (for global hotkeys). Tests for `WhisperpasteCore` continue to pass. To resolve, test via the packaged app and/or migrate to an Xcode project for full control over entitlements and linking.
+- Known issues: Building the `App` SwiftPM package in this environment can fail due to sandbox/caches. Use the packaged app (`scripts/package_app.sh`) to verify runtime features.
 
 Bug Fixes (2025-08-25)
 - Live Preview readability: switched preview editor to a true read-only presentation (no border/background, no first responder), and unified text coloring to `labelColor` to ensure dark-mode visibility within popovers.
@@ -61,14 +61,13 @@ Bug Fixes (2025-08-31)
 - Cleanup HTTP 400: removed `temperature` from cleanup API calls because some models only accept the default; avoids unsupported-parameter errors.
 
 Next Steps
-- Verify global hotkey registration end-to-end in the packaged app; update icon state and popover accordingly.
-- Add “Reveal in Finder” and playback in History; handle missing audio gracefully.
-- Improve error surfaces (network failures, permission denials) with inline UI messages.
-- Optional: Migrate to an Xcode project (app target) with entitlements and signing; set up a simple CI for tests.
-- Add integration tests with stubbed OpenAI client; add unit tests for model filtering and settings migrations.
+- Tests: Add OpenAI client stubbed tests (no network); add unit tests for model filtering and storage cleanup paths.
+- Model lists: Extract filtering/partition logic to the core for testability; keep Settings UI using core helpers.
+- Docs: Finalize README with behavior notes (hotkey, audio retention, insecure key storage) and a short “Known limitations” section.
+- Optional: Xcode project for entitlements/signing and easier notarization. Current SPM packaging is sufficient for local use.
 
 Pause Note
-- Work paused mid-task while verifying Carbon-based hotkey build under SwiftPM; resume by packaging the app (`scripts/package_app.sh`) and testing hotkeys, or by creating an Xcode app target for more reliable system integration.
+- Work continues; global hotkey and playback verified in packaged app. Use `scripts/package_app.sh` and run from `dist/` for proper permissions prompts.
 
 Today’s Progress
 - Initialized skeleton (core library + tests, menu bar stub, scripts).
