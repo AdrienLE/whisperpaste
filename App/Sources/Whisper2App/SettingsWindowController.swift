@@ -198,7 +198,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         // Populate from persisted model lists if present (transcription list ignores showAll)
         transcriptionPopup.removeAllItems()
         if let models = settings.knownTranscriptionModels, !models.isEmpty {
-            let filtered = Self.filteredModels(models, includeAll: false)
+            let filtered = ModelFiltering.filtered(models, includeAll: false)
             transcriptionPopup.addItems(withTitles: filtered)
         }
         if transcriptionPopup.itemTitles.isEmpty { transcriptionPopup.addItems(withTitles: ["Loading models…"]) }
@@ -261,7 +261,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             guard let self = self else { return }
             do {
                 let models = try client.listModels(apiKey: apiKey)
-                let (transcription, cleanup) = Self.partitionModels(models: models)
+                    let (transcription, cleanup) = ModelFiltering.partition(models: models)
                 DispatchQueue.main.async {
                     // Persist lists and mark last refresh
                     self.settings.knownTranscriptionModels = transcription
@@ -271,9 +271,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
                     let showAll = self.settings.showAllModels
                     self.transcriptionPopup.removeAllItems()
-                    self.transcriptionPopup.addItems(withTitles: Self.filteredModels(transcription, includeAll: false))
+                    self.transcriptionPopup.addItems(withTitles: ModelFiltering.filtered(transcription, includeAll: false))
                     self.cleanupPopup.removeAllItems()
-                    self.cleanupPopup.addItems(withTitles: Self.filteredModels(cleanup, includeAll: showAll))
+                    self.cleanupPopup.addItems(withTitles: ModelFiltering.filtered(cleanup, includeAll: showAll))
 
                     // Select the user’s current choices, or fall back to first item
                     if self.transcriptionPopup.itemTitles.contains(self.settings.transcriptionModel) {
@@ -297,31 +297,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    private static func partitionModels(models: [String]) -> ([String], [String]) {
-        // Transcription: whisper or transcribe
-        let trans = models.filter { id in
-            id.localizedCaseInsensitiveContains("whisper") || id.localizedCaseInsensitiveContains("transcribe")
-        }
-        // Cleanup: chat-capable gpt-* models excluding audio-only or non-chat variants
-        let excluded = ["audio", "tts", "realtime", "embed", "transcribe", "whisper"]
-        let cleanAll = models.filter { $0.hasPrefix("gpt-") }
-        let clean = cleanAll.filter { id in !excluded.contains { id.localizedCaseInsensitiveContains($0) } }
-        return (trans.isEmpty ? ["whisper-1", "gpt-4o-mini-transcribe"] : trans,
-                clean.isEmpty ? ["gpt-4o-mini", "gpt-4o"] : clean)
-    }
-
-    // Hide models containing "preview" or ending with two digits when includeAll == false
-    static func filteredModels(_ models: [String], includeAll: Bool) -> [String] {
-        guard !includeAll else { return models }
-        return models.filter { id in
-            if id.localizedCaseInsensitiveContains("preview") { return false }
-            // Ends with two digits? e.g., ...-24 or ...06 or ...2024-08
-            let lastTwo = String(id.suffix(2))
-            let endsWithTwoDigits = lastTwo.count == 2 && lastTwo.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.contains($0) }
-            if endsWithTwoDigits { return false }
-            return true
-        }
-    }
+    
 
     @objc private func toggleShowAllModels() {
         settings.showAllModels = (showAllModelsCheckbox.state == .on)
@@ -329,9 +305,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let trans = settings.knownTranscriptionModels ?? []
         let clean = settings.knownCleanupModels ?? []
         transcriptionPopup.removeAllItems()
-        transcriptionPopup.addItems(withTitles: Self.filteredModels(trans, includeAll: false))
+        transcriptionPopup.addItems(withTitles: ModelFiltering.filtered(trans, includeAll: false))
         cleanupPopup.removeAllItems()
-        cleanupPopup.addItems(withTitles: Self.filteredModels(clean, includeAll: settings.showAllModels))
+        cleanupPopup.addItems(withTitles: ModelFiltering.filtered(clean, includeAll: settings.showAllModels))
         // Keep current selections if possible
         transcriptionPopup.selectItem(withTitle: settings.transcriptionModel)
         cleanupPopup.selectItem(withTitle: settings.cleanupModel)
