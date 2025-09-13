@@ -6,7 +6,8 @@ final class LivePreviewViewController: NSViewController {
     private let statusLabel = NSTextField(labelWithString: "")
     private let spinner = NSProgressIndicator()
     private let editor = MultilineTextEditor(editable: false)
-    private let stopButton = NSButton(title: "Stop", target: nil, action: nil)
+    private let stopButton = NSButton(title: "Transcribe", target: nil, action: nil)
+    private let abortButton = NSButton(title: "Abort", target: nil, action: nil)
     private let copyButton = NSButton(title: "Copy", target: nil, action: nil)
     private let detailsButton = NSButton(title: "Details…", target: nil, action: nil)
     private var recordingIndicatorTimer: Timer?
@@ -17,6 +18,7 @@ final class LivePreviewViewController: NSViewController {
     private(set) var currentText: String = ""
     private(set) var state: State = .idle
     var onStop: (() -> Void)?
+    var onAbort: (() -> Void)?
 
     override func loadView() {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 200))
@@ -29,6 +31,9 @@ final class LivePreviewViewController: NSViewController {
 
         stopButton.target = self
         stopButton.action = #selector(didTapStop)
+
+        abortButton.target = self
+        abortButton.action = #selector(didTapAbort)
 
         detailsButton.target = self
         detailsButton.action = #selector(showErrorDetails)
@@ -43,19 +48,27 @@ final class LivePreviewViewController: NSViewController {
         // Trailing action container to hold Stop/Copy in the same spot
         actionContainer.translatesAutoresizingMaskIntoConstraints = false
         stopButton.translatesAutoresizingMaskIntoConstraints = false
+        abortButton.translatesAutoresizingMaskIntoConstraints = false
         copyButton.translatesAutoresizingMaskIntoConstraints = false
-        actionContainer.addSubview(stopButton)
+        // Stack for recording actions: Abort + Transcribe
+        let recordingStack = NSStackView(views: [abortButton, stopButton])
+        recordingStack.orientation = .horizontal
+        recordingStack.spacing = 6
+        recordingStack.alignment = .centerY
+        recordingStack.translatesAutoresizingMaskIntoConstraints = false
+        recordingStack.identifier = NSUserInterfaceItemIdentifier("recordingStack")
+        actionContainer.addSubview(recordingStack)
         actionContainer.addSubview(copyButton)
         NSLayoutConstraint.activate([
-            stopButton.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor),
-            stopButton.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
-            stopButton.topAnchor.constraint(equalTo: actionContainer.topAnchor),
-            stopButton.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor),
+            recordingStack.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor),
+            recordingStack.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
+            recordingStack.topAnchor.constraint(equalTo: actionContainer.topAnchor),
+            recordingStack.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor),
             copyButton.leadingAnchor.constraint(equalTo: actionContainer.leadingAnchor),
             copyButton.trailingAnchor.constraint(equalTo: actionContainer.trailingAnchor),
             copyButton.topAnchor.constraint(equalTo: actionContainer.topAnchor),
             copyButton.bottomAnchor.constraint(equalTo: actionContainer.bottomAnchor),
-            actionContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 68)
+            actionContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 120)
         ])
 
         let topRow = NSStackView(views: [statusLabel, spinner, detailsButton, NSView(), actionContainer])
@@ -83,11 +96,16 @@ final class LivePreviewViewController: NSViewController {
         if currentText.isEmpty { editor.string = "Speak to see live preview…" } else { editor.string = currentText }
         editor.autoScrollToEnd = true
         // Initialize trailing action placement
-        stopButton.isHidden = true
+        if let stack = actionContainer.subviews.first(where: { $0.identifier?.rawValue == "recordingStack" }) {
+            stack.isHidden = true
+        }
         stopButton.isEnabled = false
+        abortButton.isHidden = true
+        abortButton.isEnabled = false
     }
 
     @objc private func didTapStop() { onStop?() }
+    @objc private func didTapAbort() { onAbort?() }
 
     func setState(_ state: State) {
         self.state = state
@@ -105,8 +123,12 @@ final class LivePreviewViewController: NSViewController {
         case .recording:
             statusLabel.stringValue = "Recording…"
             spinner.startAnimation(nil)
-            stopButton.isHidden = false
+            if let stack = actionContainer.subviews.first(where: { $0.identifier?.rawValue == "recordingStack" }) {
+                stack.isHidden = false
+            }
             stopButton.isEnabled = true
+            abortButton.isHidden = false
+            abortButton.isEnabled = true
             copyButton.isHidden = true
             detailsButton.isHidden = true
             // Clear previous text for a fresh session
@@ -116,8 +138,12 @@ final class LivePreviewViewController: NSViewController {
         case .transcribing:
             statusLabel.stringValue = "Transcribing…"
             spinner.startAnimation(nil)
-            stopButton.isHidden = true
+            if let stack = actionContainer.subviews.first(where: { $0.identifier?.rawValue == "recordingStack" }) {
+                stack.isHidden = true
+            }
             stopButton.isEnabled = false
+            abortButton.isHidden = true
+            abortButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = true
             stopIndicator()
@@ -125,8 +151,12 @@ final class LivePreviewViewController: NSViewController {
         case .cleaning:
             statusLabel.stringValue = "Cleaning up…"
             spinner.startAnimation(nil)
-            stopButton.isHidden = true
+            if let stack = actionContainer.subviews.first(where: { $0.identifier?.rawValue == "recordingStack" }) {
+                stack.isHidden = true
+            }
             stopButton.isEnabled = false
+            abortButton.isHidden = true
+            abortButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = true
             stopIndicator()
@@ -134,8 +164,12 @@ final class LivePreviewViewController: NSViewController {
         case .error(let msg):
             statusLabel.stringValue = "Error: \(msg)"
             spinner.stopAnimation(nil)
-            stopButton.isHidden = true
+            if let stack = actionContainer.subviews.first(where: { $0.identifier?.rawValue == "recordingStack" }) {
+                stack.isHidden = true
+            }
             stopButton.isEnabled = false
+            abortButton.isHidden = true
+            abortButton.isEnabled = false
             detailsButton.isHidden = (lastErrorDetails == nil)
             copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             copyButton.isEnabled = !copyButton.isHidden

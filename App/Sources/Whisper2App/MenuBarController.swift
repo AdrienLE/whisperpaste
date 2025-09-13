@@ -126,7 +126,27 @@ final class MenuBarController: NSObject {
             }
             previewVC.setState(.recording)
             previewVC.onStop = { [weak self] in self?.toggleRecording() }
+            previewVC.onAbort = { [weak self] in self?.abortRecording() }
         }
+    }
+
+    private func abortRecording() {
+        guard isRecording else { return }
+        // Abort: stop recorder but do not run pipeline; delete captured audio if any
+        let recorderRef = recorder
+        recorderRef?.onFinish = { [weak self] url in
+            guard let self = self else { return }
+            self.isRecording = false
+            if let u = url {
+                try? FileManager.default.removeItem(at: u)
+            }
+            DispatchQueue.main.async {
+                self.previewVC.reset()
+                self.previewVC.setState(.idle)
+                self.setRecordingIcon(false)
+            }
+        }
+        recorderRef?.stop()
     }
 
     private func runTranscriptionPipeline(recordedURL: URL? = nil) {
