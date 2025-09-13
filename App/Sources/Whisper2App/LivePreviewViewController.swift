@@ -269,6 +269,7 @@ final class LivePreviewViewController: NSViewController {
     func showFinalText(_ text: String) {
         currentText = text
         copyButton.isHidden = currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        copyButton.isEnabled = !copyButton.isHidden
         refreshEditor()
     }
 
