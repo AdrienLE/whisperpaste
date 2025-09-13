@@ -113,8 +113,12 @@ final class LivePreviewViewController: NSViewController {
         case .idle:
             statusLabel.stringValue = "Last result"
             spinner.stopAnimation(nil)
-            stopButton.isHidden = true
+            if let stack = actionContainer.subviews.first(where: { $0.identifier?.rawValue == "recordingStack" }) {
+                stack.isHidden = true
+            }
             stopButton.isEnabled = false
+            abortButton.isHidden = true
+            abortButton.isEnabled = false
             detailsButton.isHidden = true
             copyButton.isHidden = (currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             copyButton.isEnabled = !copyButton.isHidden

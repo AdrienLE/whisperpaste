@@ -133,17 +133,17 @@ final class MenuBarController: NSObject {
     private func abortRecording() {
         guard isRecording else { return }
         // Abort: stop recorder but do not run pipeline; delete captured audio if any
+        isRecording = false
+        // Immediately close popover and reset UI for crisp UX
+        if popover.isShown { popover.performClose(nil) }
+        self.previewVC.reset()
+        self.previewVC.setState(.idle)
+        self.setRecordingIcon(false)
         let recorderRef = recorder
         recorderRef?.onFinish = { [weak self] url in
             guard let self = self else { return }
-            self.isRecording = false
             if let u = url {
                 try? FileManager.default.removeItem(at: u)
-            }
-            DispatchQueue.main.async {
-                self.previewVC.reset()
-                self.previewVC.setState(.idle)
-                self.setRecordingIcon(false)
             }
         }
         recorderRef?.stop()
