@@ -15,6 +15,7 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     private struct CellKey: Hashable { let row: Int; let column: String }
     private var activeCell: CellKey? = nil
+    private var localClickMonitor: Any?
 
     init(historyStore: HistoryStore) {
         self.historyStore = historyStore
@@ -101,6 +102,24 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             buttons.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
             buttons.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10)
         ])
+
+        // Monitor clicks to collapse active cell when clicking elsewhere
+        if localClickMonitor == nil {
+            localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+                guard let self = self, let active = self.activeCell else { return event }
+                let pt = self.table.convert(event.locationInWindow, from: nil)
+                let r = self.table.row(at: pt)
+                let c = self.table.column(at: pt)
+                let id = (c >= 0 && c < self.table.tableColumns.count) ? self.table.tableColumns[c].identifier.rawValue : nil
+                if r != active.row || id != active.column {
+                    let old = active.row
+                    self.activeCell = nil
+                    self.table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: old))
+                    self.table.reloadData(forRowIndexes: IndexSet(integer: old), columnIndexes: IndexSet(integersIn: 0..<self.table.numberOfColumns))
+                }
+                return event
+            }
+        }
     }
 
     private func reload() {
@@ -204,33 +223,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
             tf.cell?.wraps = false
         }
         tf.stringValue = text
-        // Disclosure toggle button to indicate/click expand state
-        let disc = NSButton()
-        disc.isBordered = false
-        disc.bezelStyle = .inline
-        disc.title = ""
-        let rightImg = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Expand")
-        let downImg = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "Collapse")
-        disc.image = isActive ? (downImg ?? NSImage()) : (rightImg ?? NSImage())
-        if disc.image == NSImage() { disc.title = isActive ? "▾" : "▸" }
-        disc.target = self
-        disc.action = #selector(toggleDisclosure(_:))
-        disc.tag = row
-        disc.identifier = NSUserInterfaceItemIdentifier("disc:\(id ?? "")")
-        disc.translatesAutoresizingMaskIntoConstraints = false
-
-        let hstack = NSStackView(views: [disc, tf])
-        hstack.orientation = .horizontal
-        hstack.spacing = 4
-        hstack.alignment = .centerY
-        hstack.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(hstack)
+        cell.addSubview(tf)
         NSLayoutConstraint.activate([
-            hstack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
-            hstack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
-            hstack.topAnchor.constraint(equalTo: cell.topAnchor, constant: 2),
-            hstack.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -2),
-            disc.widthAnchor.constraint(equalToConstant: 10)
+            tf.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+            tf.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+            tf.topAnchor.constraint(equalTo: cell.topAnchor, constant: 4),
+            tf.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -4)
         ])
         if isActive {
             DispatchQueue.main.async { [weak tf] in
@@ -273,6 +271,12 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         updateButtonsForSelection()
+        if let active = activeCell {
+            let row = active.row
+            activeCell = nil
+            table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
+            table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
+        }
     }
 
     private func updateButtonsForSelection() {
@@ -368,16 +372,8 @@ final class HistoryWindowController: NSWindowController, NSTableViewDataSource, 
         table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
     }
 
-    @objc private func toggleDisclosure(_ sender: NSButton) {
-        let row = sender.tag
-        guard row >= 0 && row < items.count else { return }
-        let idRaw = sender.identifier?.rawValue ?? ""
-        let parts = idRaw.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2 else { return }
-        let id = parts[1]
-        let key = CellKey(row: row, column: id)
-        if activeCell == key { activeCell = nil } else { activeCell = key }
-        table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
-        table.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integersIn: 0..<table.numberOfColumns))
+    deinit {
+        if let m = localClickMonitor { NSEvent.removeMonitor(m) }
+        localClickMonitor = nil
     }
 }
