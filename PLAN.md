@@ -91,3 +91,8 @@ Security Change (2025-09-07)
 Recording Reliability (2025-09-07)
 - Added verbose `NSLog` tracing around the recording lifecycle (start/auth/mic access/configure/start/stop) to debug “second recording” failures.
 - On stop, call `engine.reset()` after `engine.stop()` and log finish details. This can help release audio resources for subsequent sessions.
+
+Build Fix (2025-09-14)
+- Resolved compile errors due to missing `SettingsWindowController.filteredModels` after refactor to core utility.
+- Replaced all call sites with `ModelFiltering.filtered` in Settings and Benchmark windows, consolidating filtering logic in `WhisperpasteCore`.
+- Verified by running `scripts/test.sh` (all tests pass).

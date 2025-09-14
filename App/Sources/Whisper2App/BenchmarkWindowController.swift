@@ -110,8 +110,8 @@ final class BenchmarkWindowController: NSWindowController, NSTableViewDataSource
         var transModels = s.knownTranscriptionModels ?? [Settings(openAIKey: nil).transcriptionModel]
         var cleanModels = s.knownCleanupModels ?? [Settings(openAIKey: nil).cleanupModel]
         let includeAll = (testAllCheckbox.state == .on)
-        transModels = SettingsWindowController.filteredModels(transModels, includeAll: includeAll || s.showAllModels)
-        cleanModels = SettingsWindowController.filteredModels(cleanModels, includeAll: includeAll || s.showAllModels)
+        transModels = ModelFiltering.filtered(transModels, includeAll: includeAll || s.showAllModels)
+        cleanModels = ModelFiltering.filtered(cleanModels, includeAll: includeAll || s.showAllModels)
         // Extra cleanup eligibility filter to avoid non-chat/audio-only models
         let cleanupExcludedKeywords = ["audio", "tts", "realtime", "embed", "transcribe", "whisper"]
         cleanModels = cleanModels.filter { id in !cleanupExcludedKeywords.contains { id.localizedCaseInsensitiveContains($0) } }

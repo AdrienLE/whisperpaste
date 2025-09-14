@@ -206,7 +206,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         cleanupPopup.removeAllItems()
         if let models = settings.knownCleanupModels, !models.isEmpty {
-            let filtered = Self.filteredModels(models, includeAll: settings.showAllModels)
+            let filtered = ModelFiltering.filtered(models, includeAll: settings.showAllModels)
             cleanupPopup.addItems(withTitles: filtered)
         }
         if cleanupPopup.itemTitles.isEmpty { cleanupPopup.addItems(withTitles: ["Loading models…"]) }
